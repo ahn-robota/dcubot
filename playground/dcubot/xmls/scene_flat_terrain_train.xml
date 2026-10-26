@@ -21,21 +21,26 @@
         </body>
     </worldbody>
 
-    <!-- PLACEHOLDER pose: legs straight, slightly above ground so the robot settles under
-         gravity without initial penetration. Not yet a tuned standing pose. -->
+    <!-- Standing pose matches the Placo reference motion's own standing recording
+         (motions_dcubot/standing_0.0_0.0_0.0.json, steady-state average over the
+         last 100 frames, L/R-symmetrized; com_height=0.19, trunk_pitch=5.5deg per
+         that recording's Placo config). Root quat reordered from scipy's
+         [x,y,z,w] (gait_generator.py's R.from_matrix(...).as_quat() convention)
+         to MuJoCo's [w,x,y,z]. Joint order: left leg(5), right leg(5), head(3),
+         matching this file's body declaration order. -->
     <keyframe>
         <key name="home"
             qpos="
-    0 0 0.2475
-    1 0 0 0
-      0 0 0 0 0
+    0 0 0.2495
+    0.99885 0 0.04796 0
+      0 0 0.0769 0.0365 -0.0173
+      0 0 0.0769 0.0365 -0.0173
       0 0 0
-      0 0 0 0 0
 "
             ctrl="
-      0 0 0 0 0
+      0 0 0.0769 0.0365 -0.0173
+      0 0 0.0769 0.0365 -0.0173
       0 0 0
-      0 0 0 0 0
       "/>
     </keyframe>
 </mujoco>

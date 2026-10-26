@@ -15,84 +15,78 @@
 # ==============================================================================
 """Joystick task for DCUBOT. (based on Berkeley Humanoid / Open Duck Mini V2)
 
-2026-10-20 omnidirectional baseline rewrite: the standing-dispatch (is_standing,
-orientation/head_pos/recovery/contact_impact, fallen-init) and Disney-paper
-additions from 2026-10-17/18 are REMOVED for this baseline, per explicit user
-decision -- go back to upstream open_duck_mini_v2/joystick.py's reward/obs/
-config structure as-is, only swapping in dcubot's XML/robot params and
-reference motion. Those additions can be re-added later on top of this
-baseline if still wanted; they are preserved in
-backups/20261020_015836_pre_omnidirectional/ and in the standing.py file
-(untouched by this rewrite).
+2026-10-27 "back to origin" rewrite: per explicit user decision, this file
+follows upstream open_duck_mini_v2/joystick.py's reward/obs/config structure
+as-is; only dcubot's XML/robot params and reference motion are swapped in.
+The 2026-10-17/18 standing-dispatch/Disney-paper additions and the
+2026-10-20 omnidirectional-command pivot are BOTH superseded by this rewrite
+(the former preserved in backups/20261020_015836_pre_omnidirectional/, the
+latter in git history at commit ba85c94). Step 1 of this rewrite (see
+scripts/inspect_reference.py and its logged run) confirmed
+`polynomial_coefficients_slow.pkl` is forward-only (5 keys, dx in
+[0.049, 0.098] m/s, dy=dtheta=0 always) -- so per the user's own instruction
+("전진만 들어 있으면 명령 범위도 전진만으로 맞추고"), commands are narrowed
+back to forward-only to match, not widened to omnidirectional with
+tracking-only non-forward axes as the 10-20 rewrite had done.
 
 Deviations from upstream structure (all deliberate, reasoned, logged here per
-the user's own request to list anything that couldn't be kept identical):
+the user's own request to list anything that couldn't be kept identical --
+see docs/CHANGES_FROM_ORIGINAL.md for the full table):
 
 1. **Imitation reward function**: upstream's `reward_imitation` (custom_rewards.py)
-   indexes its reference_frame with hardcoded slice offsets (34/37/16/32...)
-   tied to ITS OWN PolyReferenceMotion pkl's internal layout. dcubot already
-   has its own `reward_imitation_dcubot` (custom_rewards.py), wired to
-   dcubot's own reference-motion layout (Placo recording order: left leg
-   [0:5], head [5:8], right leg [8:13]) and already proven over a real
-   21M-step run (2026-10-07). Used that instead of porting upstream's
-   version, which would silently misread dcubot's pkl layout. Confirmed
-   `reward_imitation_dcubot` already self-gates on `cmd_norm > 0.01`
-   internally, same semantics as upstream's `reward *= cmd_norm > 0.01`.
+   indexes its reference_frame with hardcoded slice offsets tied to ITS OWN
+   PolyReferenceMotion pkl's internal layout (16-joint duck: left leg(5) +
+   head/neck/antennas(6) + right leg(5)). dcubot's own reference layout is
+   13 joints (left leg(5) + head(3) + right leg(5), no antennas) in Placo
+   recording order, confirmed via scripts/inspect_reference.py reading the
+   raw recording JSON's own "Joints" list -- a different layout, so upstream's
+   reward_imitation would silently misread dcubot's pkl. Used dcubot's own
+   `reward_imitation_dcubot` (custom_rewards.py) instead, already proven over
+   a real 21M-step run (2026-10-07). It already self-gates on
+   `cmd_norm > 0.01` internally, same semantics as upstream's
+   `reward *= cmd_norm > 0.01`.
 
-2. **Omnidirectional reference motion NOT used for imitation** (the big one):
-   attempted building a true 3D (dx,dy,dtheta) omnidirectional reference pkl
-   tonight (see reference_motion_generator/omnidirectional_phase1_report.md
-   and this session's follow-up investigation). Found the 210-combo sweep's
-   per-axis real achieved velocity (Vel_x/Vel_y/Yaw fields in each recording)
-   is dominated by noise once dx/dy/dtheta are combined simultaneously at
-   the sweep's extremes (marginal mean real velocity per intention-axis
-   value came out near-zero with std larger than the mean -- e.g. dtheta
-   intention swung +-1.961 but mean real yaw was only +-0.04, std 0.026,
-   i.e. most of the 42 combos sharing that dtheta value produced near-zero
-   net turning, consistent with many 3-axis-simultaneous-extreme combos
-   being degenerate/non-walking rather than real omnidirectional gaits).
-   `PolyReferenceMotion.process()` also structurally requires a dense
-   (dx x dy x dtheta) grid -- relabeling recordings by real achieved
-   velocity (which varies per-combo due to cross-axis coupling) breaks that
-   grid (confirmed: raises KeyError when the three axes' unique-value sets
-   no longer form a clean cartesian product). Rather than ship a reference
-   motion that would reward imitating likely-degenerate recorded motion for
-   most of the non-forward command space, IMITATION REWARD IS KEPT SCOPED
-   TO FORWARD ONLY: `DCUBOT_REFERENCE_PKL` still points at the existing,
-   already-validated forward-only `polynomial_coefficients_slow.pkl`
-   (proven over a real 21M-step run), and the PRM lookup's dy/dtheta
-   arguments are permanently pinned to (0, 0) regardless of the actual
-   commanded dy/dtheta (same mechanism the pre-rewrite file already used
-   under its USE_WIDER_COMMANDS flag -- now just the permanent default,
-   not an ablation). Backward/strafe/turn are trained via
-   tracking_lin_vel/tracking_ang_vel ALONE (no imitation term for those
-   commands) -- a standard, well-established approach for omnidirectional
-   legged RL (reference-motion imitation is a gait-naturalism aid, not a
-   strict requirement for learning to track a commanded velocity). A proper
-   fix (regenerating single-axis-at-a-time omnidirectional recordings like
-   motions_dcubot/'s existing 9 files, instead of the full simultaneous
-   3-axis cartesian sweep, then building a grid from those) is future work,
-   not done tonight.
+2. **Command ranges are forward-only**, matching the reference pkl's actual
+   coverage exactly (dx in [0.049, 0.098] m/s, dy=0, dtheta=0) -- see
+   deviation note above. This is the SAME choice the original 2026-10-07
+   successful run made; it is a reversion, not a new decision. A true
+   omnidirectional reference motion remains future work (attempted
+   2026-10-20, found data-quality issues -- see
+   reference_motion_generator/omnidirectional_phase1_report.md and git
+   history -- not resolved, not used here).
 
-3. **Command ranges**: widened past upstream's placeholder-ish values to
-   dcubot's own measured, non-saturated real velocities (see
-   dcubot_placo_speed_cadence_fix_1015 memory and tonight's recording
-   analysis): lin_vel_x=[-0.13, 0.195] (forward measured up to ~0.195 m/s
-   at dx=0.04; backward measured ~-0.133 m/s at dx=-0.04; both comfortably
-   under their respective saturation ceilings ~0.59/-0.266 m/s),
-   lin_vel_y=[-0.1, 0.1] (measured strafe ~0.062 m/s at dy=0.04, saturation
-   ~0.16 m/s -- 0.1 leaves real margin without being conservative to the
-   point of not exercising the policy), ang_vel_yaw=[-0.2, 0.2] (matches
-   the pre-rewrite file's already-reasoned USE_WIDER_COMMANDS value, safely
-   under the ~0.23-0.24 rad/s saturation ceiling measured at dtheta
-   intention ~0.8-1.0).
+3. **Head joint command is 3-dim, not 4-dim**: dcubot's head has
+   neck_pitch/head_pitch/head_yaw only (no head_roll, no antennas), so
+   `sample_command` returns a 6-dim vector (3 move + 3 head) instead of
+   upstream's 7-dim. Head command ranges are set to dcubot's own joint
+   limits read directly from xmls/dcubot.xml (neck_pitch +-0.785398,
+   head_pitch/head_yaw +-1.570796), not copied from upstream's duck-specific
+   neck/head ranges.
 
-4. **feet_air_time/feet_gait/feet_clearance dropped**: these were
+4. **tracking_sigma lowered from upstream's 0.01 to 0.004**: upstream's
+   sigma was tuned for a +-0.15 m/s command range (span 0.3); dcubot's
+   forward-only range (0.049-0.098, span 0.049, max magnitude 0.098) is
+   roughly 3-6x narrower. Keeping sigma=0.01 unchanged would make the
+   tracking reward proportionally much more forgiving for dcubot (a
+   worst-case tracking error equal to the entire command range would still
+   give reward~0.38, vs upstream's ~0.11 for the same relative error),
+   weakening the signal to track precisely within this narrow regime.
+   0.004 restores comparable proportional sensitivity (worst-case relative
+   error gives ~0.11, matching upstream). `y_tol`=0.1 (reward_tracking_lin_vel)
+   left unchanged per the user's own instruction, pending a reference-replay
+   measurement of lateral wobble.
+
+5. **feet_air_time/feet_gait/feet_clearance dropped**: these were
    dcubot-specific additions (not in upstream open_duck_mini_v2/joystick.py
-   at all) layered on earlier. Dropped for fidelity to "use upstream
-   structure as-is" per the user's explicit instruction, not because they
-   were found to be harmful -- they can be re-added later if the baseline's
-   gait quality needs it.
+   at all) layered on in an earlier session. Dropped for fidelity to "use
+   upstream structure as-is" -- not because they were found harmful, they
+   can be re-added later if gait quality needs it.
+
+6. **Home keyframe pose** (xmls/scene_flat_terrain*.xml): replaced the
+   placeholder all-zero/legs-straight pose with the reference motion's own
+   standing posture (motions_dcubot/standing_0.0_0.0_0.0.json, steady-state
+   average, L/R-symmetrized) -- com_height=0.19/trunk_pitch=5.5deg, per the
+   user's Step 2 instruction.
 """
 
 from typing import Any, Dict, Optional, Union
@@ -165,7 +159,7 @@ def default_config() -> config_dict.ConfigDict:
                 alive=20.0,  # upstream's value (dcubot had lowered this to 8.0 for the now-removed standing dispatch)
                 imitation=1.0,
             ),
-            tracking_sigma=0.01,
+            tracking_sigma=0.004,  # see deviation #4 above
         ),
         push_config=config_dict.create(
             enable=True,
@@ -173,13 +167,15 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        # See deviation #3 above for the reasoning behind each bound.
-        lin_vel_x=[-0.13, 0.195],
-        lin_vel_y=[-0.1, 0.1],
-        ang_vel_yaw=[-0.2, 0.2],
-        neck_pitch_range=[-0.34, 1.1],
-        head_pitch_range=[-0.78, 0.78],
-        head_yaw_range=[-1.5, 1.5],
+        # Forward-only, matching polynomial_coefficients_slow.pkl's actual
+        # coverage exactly -- see deviation #2 above.
+        lin_vel_x=[0.049, 0.098],
+        lin_vel_y=[0.0, 0.0],
+        ang_vel_yaw=[0.0, 0.0],
+        # dcubot's own joint limits (xmls/dcubot.xml) -- see deviation #3 above.
+        neck_pitch_range=[-0.785398, 0.785398],
+        head_pitch_range=[-1.570796, 1.570796],
+        head_yaw_range=[-1.570796, 1.570796],
         head_range_factor=1.0,
     )
 
@@ -566,13 +562,13 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             [
                 noisy_gyro,  # 3
                 noisy_accelerometer,  # 3
-                info["command"],  # 3
-                noisy_joint_angles - self._default_actuator,  # 10
-                noisy_joint_vel * self._config.dof_vel_scale,  # 10
-                info["last_act"],  # 10
-                info["last_last_act"],  # 10
-                info["last_last_last_act"],  # 10
-                info["motor_targets"],  # 10
+                info["command"],  # 6 (3 move + 3 head, see deviation #3)
+                noisy_joint_angles - self._default_actuator,  # 13
+                noisy_joint_vel * self._config.dof_vel_scale,  # 13
+                info["last_act"],  # 13
+                info["last_last_act"],  # 13
+                info["last_last_last_act"],  # 13
+                info["motor_targets"],  # 13
                 contact,  # 2
                 gait_phase,  # 2
             ]
@@ -594,7 +590,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 joint_angles - self._default_actuator,
                 joint_vel,
                 root_height,  # 1
-                data.actuator_force,  # 10
+                data.actuator_force,  # 13
                 contact,  # 2
                 feet_vel,  # 4*3
                 info["feet_air_time"],  # 2
@@ -642,14 +638,13 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         }
 
         if USE_IMITATION_REWARD:
-            # Deviation #2: imitation reference only covers forward motion
-            # (dy=dtheta=0 pinned) -- see module docstring. Backward/strafe/
-            # turn commands still get tracking_lin_vel/ang_vel above, just
-            # no imitation guidance.
+            # Commands are forward-only by construction (deviation #2) --
+            # command[1]/command[2] (lin_vel_y/ang_vel_yaw) are always 0, so
+            # no pinning is needed here (unlike the superseded 10-20 rewrite).
             reference_frame = self.PRM.get_reference_motion(
                 info["command"][0],
-                0.0,
-                0.0,
+                info["command"][1],
+                info["command"][2],
                 info["gait_step"],
             )
             ret["imitation"] = reward_imitation_dcubot(

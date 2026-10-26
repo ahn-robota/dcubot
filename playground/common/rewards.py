@@ -96,23 +96,24 @@ def cost_stand_still(
     qvel: jax.Array,
     default_pose: jax.Array,
     ignore_head: bool = False,
+    leg_indices: jax.Array = None,
 ) -> jax.Array:
-    # TODO no hard coded slices
+    """leg_indices: indices of the leg joints (both legs) within qpos/qvel/
+    default_pose, only required when ignore_head=True. Must be derived from
+    joint NAMES by the caller (e.g. via constants.JOINTS_ORDER_NO_HEAD-style
+    name matching) -- never hardcode numeric slices here, since the joint
+    count/order differs per robot (was a real bug: this used to hardcode
+    qpos[:5]/qpos[9:], which silently picked up the wrong joints -- part of
+    the head block -- on any robot without the original duck's exact 16-joint
+    layout)."""
     cmd_norm = jp.linalg.norm(commands[:3])
     if not ignore_head:
         pose_cost = jp.sum(jp.abs(qpos - default_pose))
         vel_cost = jp.sum(jp.abs(qvel))
     else:
-        left_leg_pos = qpos[:5]
-        right_leg_pos = qpos[9:]
-        left_leg_vel = qvel[:5]
-        right_leg_vel = qvel[9:]
-        left_leg_default = default_pose[:5]
-        right_leg_default = default_pose[9:]
-        pose_cost = jp.sum(jp.abs(left_leg_pos - left_leg_default)) + jp.sum(
-            jp.abs(right_leg_pos - right_leg_default)
-        )
-        vel_cost = jp.sum(jp.abs(left_leg_vel)) + jp.sum(jp.abs(right_leg_vel))
+        assert leg_indices is not None, "leg_indices required when ignore_head=True"
+        pose_cost = jp.sum(jp.abs(qpos[leg_indices] - default_pose[leg_indices]))
+        vel_cost = jp.sum(jp.abs(qvel[leg_indices]))
 
     return jp.nan_to_num(pose_cost + vel_cost) * (cmd_norm < 0.01)
 
@@ -132,11 +133,17 @@ def cost_head_pos(
     joints_qpos: jax.Array,
     joints_qvel: jax.Array,
     cmd: jax.Array,
+    head_indices: jax.Array,
 ) -> jax.Array:
+    """head_indices: indices of the head joints within joints_qpos, in the
+    same order as cmd[3:]. Must be derived from joint NAMES by the caller --
+    never hardcode a numeric slice here (was previously joints_qpos[5:9],
+    the original duck's head-joint slice; wrong for any robot with a
+    different joint count/order, e.g. dcubot's 13-joint/no-antenna layout)."""
     move_cmd_norm = jp.linalg.norm(cmd[:3])
     head_cmd = cmd[3:]
-    head_pos = joints_qpos[5:9]
-    # head_vel = joints_qvel[5:9]
+    head_pos = joints_qpos[head_indices]
+    # head_vel = joints_qvel[head_indices]
 
     # target_head_qvel = jp.zeros_like(head_cmd)
 
