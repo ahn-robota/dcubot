@@ -15,19 +15,25 @@
 # ==============================================================================
 """Joystick task for DCUBOT. (based on Berkeley Humanoid / Open Duck Mini V2)
 
-2026-10-27 "back to origin" rewrite: per explicit user decision, this file
-follows upstream open_duck_mini_v2/joystick.py's reward/obs/config structure
-as-is; only dcubot's XML/robot params and reference motion are swapped in.
-The 2026-10-17/18 standing-dispatch/Disney-paper additions and the
-2026-10-20 omnidirectional-command pivot are BOTH superseded by this rewrite
-(the former preserved in backups/20261020_015836_pre_omnidirectional/, the
-latter in git history at commit ba85c94). Step 1 of this rewrite (see
-scripts/inspect_reference.py and its logged run) confirmed
-`polynomial_coefficients_slow.pkl` is forward-only (5 keys, dx in
-[0.049, 0.098] m/s, dy=dtheta=0 always) -- so per the user's own instruction
-("전진만 들어 있으면 명령 범위도 전진만으로 맞추고"), commands are narrowed
-back to forward-only to match, not widened to omnidirectional with
-tracking-only non-forward axes as the 10-20 rewrite had done.
+2026-10-27 "back to origin" rewrite, v2 (omnidirectional): per explicit user
+decision, this file follows upstream open_duck_mini_v2/joystick.py's
+reward/obs/config structure as-is; only dcubot's XML/robot params and
+reference motion are swapped in -- matching upstream's own omnidirectional
+training (the user's explicit goal: "기존 오픈덕 미니랑 동일한 학습 구조로
+하고 싶다"). The 2026-10-17/18 standing-dispatch/Disney-paper additions are
+superseded by this rewrite (preserved in
+backups/20261020_015836_pre_omnidirectional/).
+
+History of this file today: an earlier pass today reverted to forward-only
+commands after Step 1 found `polynomial_coefficients_slow.pkl` (5 keys,
+dx-only) was the pkl actually wired in. Separately, the 2026-10-20 session's
+210-combo omnidirectional sweep had been deleted from the project as
+"data-quality broken" -- that judgment turned out to be entangled with a
+replay-script bug (see memory dcubot_omnidirectional_restored_1027), not a
+real problem with the data itself, so it was restored from a permanent
+backup (`/home/ahn/dcubot_reference_motion_FINAL_omnidirectional/`,
+read-only, outside the project tree) and is now wired in as
+`polynomial_coefficients_omnidirectional.pkl` below.
 
 Deviations from upstream structure (all deliberate, reasoned, logged here per
 the user's own request to list anything that couldn't be kept identical --
@@ -46,14 +52,36 @@ see docs/CHANGES_FROM_ORIGINAL.md for the full table):
    `cmd_norm > 0.01` internally, same semantics as upstream's
    `reward *= cmd_norm > 0.01`.
 
-2. **Command ranges are forward-only**, matching the reference pkl's actual
-   coverage exactly (dx in [0.049, 0.098] m/s, dy=0, dtheta=0) -- see
-   deviation note above. This is the SAME choice the original 2026-10-07
-   successful run made; it is a reversion, not a new decision. A true
-   omnidirectional reference motion remains future work (attempted
-   2026-10-20, found data-quality issues -- see
-   reference_motion_generator/omnidirectional_phase1_report.md and git
-   history -- not resolved, not used here).
+2. **Command ranges are based on each recording's own REAL ACHIEVED velocity
+   (Vel_x/Vel_y/Yaw fields), NOT the pkl's intention labels** (the filename/
+   key values). Checked directly against the pure single-axis recordings in
+   reference_motion_generator/recordings_omnidirectional/ (2026-10-27):
+
+   | axis | intention label range | real achieved range | ratio |
+   |------|------------------------|----------------------|-------|
+   | dx (fwd/back) | 0.098-0.294 | 0.100-0.300 | ~1.0x (clean) |
+   | dy (strafe)   | 0.098-0.294 | 0.057-0.158 | ~0.55x |
+   | dtheta (turn) | 0.98-1.961  | 0.024-0.103 rad/s | ~0.03-0.05x |
+
+   dx and dy are close enough to 1:1 (or a consistent linear scale) to use
+   directly. dtheta is NOT: commanding anywhere near the label's scale
+   (up to 1.961 rad/s) would ask for a turn rate the robot/gait physically
+   never gets close to (real achieved is only ~0.03-0.1 rad/s), which would
+   put tracking_ang_vel (rewarding fast turning) and imitation (rewarding
+   following the much-slower reference gait) into direct conflict. So
+   `ang_vel_yaw`'s command range is set to the REAL achieved scale
+   (+-0.103 rad/s), not the label scale. One consequence: at this achieved
+   scale, `PolyReferenceMotion.vel_to_index`'s nearest-neighbor snap will
+   mostly land on the dtheta=0 (straight-gait) reference frame, since 0.103
+   is much closer to the grid's 0 point than to its next label (0.98) --
+   turning is therefore driven mostly by tracking_ang_vel, with the
+   imitation term contributing comparatively little guidance for that axis
+   specifically (same situation as dx/dy would be in if their achieved
+   values were similarly far below the grid spacing -- they're not, so this
+   caveat is dtheta-specific). This is a data limitation of the current
+   Placo sweep (its dtheta parameter apparently isn't a direct rad/s dial),
+   not a code bug; revisiting the sweep generation to get faster real
+   turning is future work.
 
 3. **Head joint command is 3-dim, not 4-dim**: dcubot's head has
    neck_pitch/head_pitch/head_yaw only (no head_roll, no antennas), so
@@ -63,18 +91,19 @@ see docs/CHANGES_FROM_ORIGINAL.md for the full table):
    head_pitch/head_yaw +-1.570796), not copied from upstream's duck-specific
    neck/head ranges.
 
-4. **tracking_sigma lowered from upstream's 0.01 to 0.004**: upstream's
-   sigma was tuned for a +-0.15 m/s command range (span 0.3); dcubot's
-   forward-only range (0.049-0.098, span 0.049, max magnitude 0.098) is
-   roughly 3-6x narrower. Keeping sigma=0.01 unchanged would make the
-   tracking reward proportionally much more forgiving for dcubot (a
-   worst-case tracking error equal to the entire command range would still
-   give reward~0.38, vs upstream's ~0.11 for the same relative error),
-   weakening the signal to track precisely within this narrow regime.
-   0.004 restores comparable proportional sensitivity (worst-case relative
-   error gives ~0.11, matching upstream). `y_tol`=0.1 (reward_tracking_lin_vel)
-   left unchanged per the user's own instruction, pending a reference-replay
-   measurement of lateral wobble.
+4. **tracking_sigma kept at upstream's 0.01** (not lowered, unlike this
+   file's earlier forward-only pass): with the omnidirectional command
+   ranges above, lin_vel_x's max magnitude (0.30) and lin_vel_y's (0.158)
+   are now close enough to upstream's own (0.222/0.111) that upstream's
+   sigma is a reasonable fit again. ang_vel_yaw's range (+-0.103) is much
+   narrower than upstream's (+-1.111-1.222) -- sigma=0.01 will be
+   proportionally more forgiving for turning than for forward/strafe, but
+   since real achievable turn rate is tiny in absolute terms anyway,
+   absolute errors stay small regardless, so this isn't expected to be a
+   major issue in practice; flagged here in case turning behavior looks
+   under-trained. `y_tol`=0.1 (reward_tracking_lin_vel) left unchanged per
+   the user's own instruction, pending a reference-replay measurement of
+   lateral wobble.
 
 5. **feet_air_time/feet_gait/feet_clearance dropped**: these were
    dcubot-specific additions (not in upstream open_duck_mini_v2/joystick.py
@@ -118,7 +147,7 @@ from playground.dcubot.custom_rewards import reward_imitation_dcubot
 # layout-incompatible with dcubot's pkl, reward_imitation_dcubot used instead.
 USE_IMITATION_REWARD = True
 USE_MOTOR_SPEED_LIMITS = True
-DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_slow.pkl"
+DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional.pkl"
 
 
 def default_config() -> config_dict.ConfigDict:
@@ -159,7 +188,7 @@ def default_config() -> config_dict.ConfigDict:
                 alive=20.0,  # upstream's value (dcubot had lowered this to 8.0 for the now-removed standing dispatch)
                 imitation=1.0,
             ),
-            tracking_sigma=0.004,  # see deviation #4 above
+            tracking_sigma=0.01,  # see deviation #4 above
         ),
         push_config=config_dict.create(
             enable=True,
@@ -167,11 +196,11 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        # Forward-only, matching polynomial_coefficients_slow.pkl's actual
-        # coverage exactly -- see deviation #2 above.
-        lin_vel_x=[0.049, 0.098],
-        lin_vel_y=[0.0, 0.0],
-        ang_vel_yaw=[0.0, 0.0],
+        # Based on each axis's REAL ACHIEVED velocity, not the pkl's
+        # intention labels -- see deviation #2 above.
+        lin_vel_x=[-0.20, 0.30],
+        lin_vel_y=[-0.158, 0.158],
+        ang_vel_yaw=[-0.103, 0.103],
         # dcubot's own joint limits (xmls/dcubot.xml) -- see deviation #3 above.
         neck_pitch_range=[-0.785398, 0.785398],
         head_pitch_range=[-1.570796, 1.570796],
@@ -638,9 +667,10 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         }
 
         if USE_IMITATION_REWARD:
-            # Commands are forward-only by construction (deviation #2) --
-            # command[1]/command[2] (lin_vel_y/ang_vel_yaw) are always 0, so
-            # no pinning is needed here (unlike the superseded 10-20 rewrite).
+            # Omnidirectional: command[0:3] (lin_vel_x/y, ang_vel_yaw) feed
+            # the PRM lookup directly, same as upstream -- see deviation #2
+            # for why these ranges are achieved-velocity-based, not the
+            # pkl's raw intention labels.
             reference_frame = self.PRM.get_reference_motion(
                 info["command"][0],
                 info["command"][1],
