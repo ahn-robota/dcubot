@@ -149,3 +149,6 @@ brax's `ppo.train`, before any training step.
   `gpusolverDnCreate ... cuSolver internal error` -- XLA's 95% pool plus the
   display leaves no room for cuSolver's own workspace.
 - `--num_envs 1024` with `XLA_PYTHON_CLIENT_MEM_FRACTION=0.85`: runs.
+  Short probe: step 0 reward 24.9 / ep_len 72.0, step 655,360 reward 27.2 /
+  ep_len 79.1 (same range as the laptop run), **768 steps/s** (laptop 495)
+  at 100% GPU utilization. 50M steps ~18 h (laptop ~28 h).
