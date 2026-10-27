@@ -7,14 +7,30 @@ in custom_rewards.py is correct; a low component means the slice is wrong.
 
 Usage (from rl_training/):
     .venv/bin/python scripts/replay_reference.py
+    .venv/bin/python scripts/replay_reference.py --pkl playground/dcubot/data/polynomial_coefficients_slow.pkl
+
+Default --pkl is whichever one playground/dcubot/joystick.py currently
+points at (DCUBOT_REFERENCE_PKL) -- the omnidirectional 210-combo pkl as of
+2026-10-27. With that many keys this prints one block per key (210 blocks);
+pass --keys to spot-check a subset instead (e.g. --keys 0.0_0.0_0.0 for the
+closest-to-standing combo).
+
+NOTE: the actual 2026-10-27 omnidirectional verification used
+scripts/replay_directions_mujoco.py instead of this script -- that one
+replays the RAW recordings (not this pkl's fitted polynomial) with a full
+qpos/base-trajectory teleport in the live MuJoCo viewer, which is what the
+user visually confirmed. This script's teleport-and-score approach is
+complementary (checks the fitted polynomial + reward slicing numerically,
+no viewer needed) but was not the one used for that visual confirmation.
 """
 
+import argparse
 import numpy as np
 import mujoco
 import pickle
 import jax.numpy as jp
 
-PKL = "playground/dcubot/data/polynomial_coefficients_slow.pkl"
+DEFAULT_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional.pkl"
 XML = "playground/dcubot/xmls/scene_flat_terrain.xml"
 
 
@@ -25,7 +41,15 @@ def sample_polynomial(t, coeffs):
 
 
 def main():
-    data = pickle.load(open(PKL, "rb"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pkl", type=str, default=DEFAULT_PKL)
+    parser.add_argument(
+        "--keys", type=str, nargs="*", default=None,
+        help="Only check these dx_dy_dtheta keys (default: all keys in the pkl).",
+    )
+    args = parser.parse_args()
+
+    data = pickle.load(open(args.pkl, "rb"))
     m = mujoco.MjModel.from_xml_path(XML)
     floor_id = m.geom("floor").id
     left_geom = m.geom("left_foot_collision").id
@@ -35,7 +59,8 @@ def main():
     mujoco.mj_resetDataKeyframe(m, d, 0)
     home_qpos_base = d.qpos[:7].copy()  # keep base pose fixed at the home keyframe
 
-    for key in sorted(data.keys(), key=lambda k: float(k.split("_")[0])):
+    keys_to_check = args.keys if args.keys else data.keys()
+    for key in sorted(keys_to_check, key=lambda k: float(k.split("_")[0])):
         entry = data[key]
         period, fps = entry["period"], entry["fps"]
         nb_steps = int(period * fps)
