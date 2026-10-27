@@ -31,8 +31,13 @@ ang_vel_yaw: -0.102 .. 0.103   (config: [-0.103, 0.103])
 ## Reference replay test (reward_imitation_dcubot slicing check)
 
 ```
-.venv/bin/python scripts/replay_reference.py --keys 0.098_0.0_0.0 --keys=-0.098_0.0_0.0
+.venv/bin/python scripts/replay_reference.py --keys 0.098_0.0_0.0
+.venv/bin/python scripts/replay_reference.py --keys=-0.098_0.0_0.0
+.venv/bin/python scripts/replay_reference.py   # all 210 keys
 ```
+
+(`--keys` is `nargs="*"`, so repeating the flag keeps only the last value --
+one key per run, or no `--keys` for all keys.)
 
 Teleports qpos/qvel directly from the fitted
 `polynomial_coefficients_omnidirectional.pkl` and checks
@@ -109,7 +114,21 @@ remap bug in this script was fixed (left/right/head block ordering).
   `tracking_ang_vel`, not `imitation`, for this reason.
 - `cost_feet_clearance`/`y_tol` lateral-wobble measurement (mentioned as
   pending in `docs/CHANGES_FROM_ORIGINAL.md` #4) was not done.
-- The two now-unused forward-only pkls
-  (`polynomial_coefficients.pkl`, `polynomial_coefficients_slow.pkl`) are
-  still in `playground/dcubot/data/` -- not deleted, pending a decision
-  (see commit history / chat for that question).
+
+## Lab PC reproduction (2026-10-27, RTX 3080 10GB)
+
+Same commands as above, after `uv sync --locked` (Python 3.13.13, jax/jaxlib
+0.9.0, playground 0.0.5, mujoco/mujoco-mjx 3.12.0, brax 0.14.2).
+
+- `jax.devices()`: `[CudaDevice(id=0)]`
+- Dimensions: identical (`privileged_state` 159, `state` 94, action 13).
+  50 zero-action steps after reset: no NaN, no termination.
+- Command sampling (200 draws, different seed): lin_vel_x -0.200..0.295,
+  lin_vel_y -0.155..0.157, ang_vel_yaw -0.102..0.102 -- within config bounds.
+- Reference replay, all 210 keys: `joint_pos_rew` 1.000 and
+  `joint_vel_rew` 1.000 (min 1.000 on every key); `contact_rew` 0.400 on
+  every key (sim contacts are `[0, 0]` throughout -- the fixed home base
+  pose keeps the feet off the floor, the test-method limitation described
+  above).
+
+Matches the laptop results.

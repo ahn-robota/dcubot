@@ -64,6 +64,6 @@ uv run tensorboard --logdir checkpoints/<실험이름>
 - [x] 원점 재시작: 원본 `open_duck_mini_v2` 구조로 `joystick.py` 재작성, 전방향 레퍼런스 모션 연결
 - [x] 노트북 검증: 레퍼런스 재생, 짧은 전방향 검증 학습(3.6M 스텝) 통과
 - [x] `uv.lock` 고정, `--num_envs` 인자, 전진 전용 pkl 삭제
-- [ ] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교
+- [x] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교 (일치, `docs/VERIFICATION_2026-10-27.md` 하단)
 - [ ] 실습실 PC `num_envs` 측정 (1024 / 2048)
 - [ ] 실습실 PC 본 학습 (30~50M 스텝)
