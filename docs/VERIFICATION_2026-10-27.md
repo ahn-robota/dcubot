@@ -132,3 +132,20 @@ Same commands as above, after `uv sync --locked` (Python 3.13.13, jax/jaxlib
   above).
 
 Matches the laptop results.
+
+### num_envs / GPU memory on the lab PC
+
+The RTX 3080 also drives the display (~0.2GB), so less VRAM is free than
+the 10GB nominal. Both failures below happen at the first `reset_fn_` in
+brax's `ppo.train`, before any training step.
+
+- `--num_envs 2048`: does not fit. XLA reports the reset step alone needs
+  10.48GiB vs 8.70GiB available (`Failed to allocate ... for new constant`;
+  with preallocation off it surfaces as `Autotuning failed ... No valid
+  config found`). Memory scales with num_envs, so 1024 needs ~5.2GiB.
+  Values between 1024 and 2048 are not an option without changing PPO
+  settings (`batch_size * num_minibatches` = 8192 must divide by num_envs).
+- `--num_envs 1024` with `XLA_PYTHON_CLIENT_MEM_FRACTION=0.95`: fails with
+  `gpusolverDnCreate ... cuSolver internal error` -- XLA's 95% pool plus the
+  display leaves no room for cuSolver's own workspace.
+- `--num_envs 1024` with `XLA_PYTHON_CLIENT_MEM_FRACTION=0.85`: runs.

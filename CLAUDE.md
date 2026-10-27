@@ -36,7 +36,12 @@
 - 두 PC 모두 같은 경로에서 작업한다: `~/dcubot/DCUBOT/rl_training` (저장소 루트).
 - 작업 시작 전 `git pull`, 끝나면 커밋·push. 두 PC에서 같은 파일을 동시에 고치지 않는다.
 - 체크포인트, 로그, `.venv`는 git에 올리지 않고 각 PC에서 따로 관리한다.
-- PC마다 다른 값은 코드에 박지 않고 실행 인자나 환경변수로 넘긴다: `--num_envs`(노트북 1024), `XLA_PYTHON_CLIENT_MEM_FRACTION`.
+- PC마다 다른 값은 코드에 박지 않고 실행 인자나 환경변수로 넘긴다: `--num_envs`, `XLA_PYTHON_CLIENT_MEM_FRACTION`.
+
+  | PC | `--num_envs` | `XLA_PYTHON_CLIENT_MEM_FRACTION` |
+  |---|---|---|
+  | 노트북 (RTX 4050 6GB) | 1024 | 0.95 |
+  | 실습실 PC (RTX 3080 10GB) | 1024 (2048은 메모리 부족) | 0.85 (0.95는 cuSolver 오류) |
 
 ## 자주 쓰는 명령 (저장소 루트에서)
 
@@ -44,8 +49,8 @@
 uv sync                                              # uv.lock 기준 환경 구성
 uv run python -c "import jax; print(jax.devices())"  # CudaDevice 확인
 
-# 학습 (--num_envs는 PC의 VRAM에 맞게)
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.95 uv run python -u -m playground.dcubot.runner \
+# 학습 (--num_envs, MEM_FRACTION은 위 표의 PC별 값)
+XLA_PYTHON_CLIENT_MEM_FRACTION=<비율> uv run python -u -m playground.dcubot.runner \
   --task flat_terrain_train --num_envs <N> \
   --output_dir checkpoints/<실험이름> --num_timesteps <스텝>
 
@@ -65,5 +70,6 @@ uv run tensorboard --logdir checkpoints/<실험이름>
 - [x] 노트북 검증: 레퍼런스 재생, 짧은 전방향 검증 학습(3.6M 스텝) 통과
 - [x] `uv.lock` 고정, `--num_envs` 인자, 전진 전용 pkl 삭제
 - [x] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교 (일치, `docs/VERIFICATION_2026-10-27.md` 하단)
-- [ ] 실습실 PC `num_envs` 측정 (1024 / 2048)
-- [ ] 실습실 PC 본 학습 (30~50M 스텝)
+- [x] 실습실 PC `num_envs` 결정: 1024 (2048은 메모리 부족, 자세한 내용은 `docs/VERIFICATION_2026-10-27.md` 하단)
+- [ ] 실습실 PC 1024 처리량(steps/s) 측정 → 50M 예상 시간
+- [ ] 실습실 PC 본 학습: 실험 이름 `omni_1024_50m` (50M 스텝, `num_envs` 1024, MEM_FRACTION 0.85, 그 외 설정은 노트북 검증과 동일)
