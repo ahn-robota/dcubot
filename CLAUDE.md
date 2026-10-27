@@ -72,4 +72,7 @@ uv run tensorboard --logdir checkpoints/<실험이름>
 - [x] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교 (일치, `docs/VERIFICATION_2026-10-27.md` 하단)
 - [x] 실습실 PC `num_envs` 결정: 1024 (2048은 메모리 부족, 자세한 내용은 `docs/VERIFICATION_2026-10-27.md` 하단)
 - [x] 실습실 PC 1024 처리량 측정: 768 steps/s (노트북 495) → 50M 약 18시간
-- [ ] 실습실 PC 본 학습: 실험 이름 `omni_1024_50m` (50M 스텝, `num_envs` 1024, MEM_FRACTION 0.85, 그 외 설정은 노트북 검증과 동일)
+- [ ] 실습실 PC 본 학습 **진행 중**: `omni_1024_50m`, 2026-10-27 15:21 시작, 예상 종료 10-28 오전 9~10시
+  - 설정: 50M 스텝, `--num_envs 1024`, `--num_evals` 기본 30, MEM_FRACTION 0.85, 그 외는 노트북 검증과 동일
+  - 실습실 PC tmux 세션 `train`: 창 `train`(학습), 창 `tensorboard`(포트 6006)
+  - 로그·체크포인트: `checkpoints/omni_1024_50m/` (`train.log`에 STEP 줄)
