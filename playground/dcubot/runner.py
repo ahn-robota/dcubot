@@ -12,8 +12,10 @@ from playground.common.runner import BaseRunner
 from playground.dcubot import joystick
 
 # The borrowed "BerkeleyHumanoidJoystickFlatTerrain" PPO config defaults to
-# num_envs=8192, which needs more VRAM than this machine's GPU has (RTX 4050
-# laptop, 6GB). Scaled down to fit.
+# num_envs=8192, which needs more VRAM than some machines have (e.g. this
+# laptop's RTX 4050, 6GB). --num_envs lets each machine pick its own value;
+# 1024 is the default (safe for a 6GB GPU). A GPU with more VRAM (e.g. a
+# lab RTX 3080, 10GB) can likely raise this for better throughput.
 DCUBOT_NUM_ENVS = 1024
 # Number of evaluations (and progress prints) over the whole run. Each eval costs
 # roughly 5 min on this machine, so 30 gives a print every ~11 min at 20M steps.
@@ -36,7 +38,7 @@ class DcubotRunner(BaseRunner):
             "BerkeleyHumanoidJoystickFlatTerrain"
         )
         self.ppo_training_params = dict(self.ppo_params)
-        self.ppo_training_params["num_envs"] = DCUBOT_NUM_ENVS
+        self.ppo_training_params["num_envs"] = self.num_envs
         self.ppo_training_params["num_evals"] = self.num_evals
 
         if "network_factory" in self.ppo_params:
@@ -85,6 +87,7 @@ class DcubotRunner(BaseRunner):
         )  # 0: state 1: privileged_state
         self.restore_checkpoint_path = args.restore_checkpoint_path
         self.num_evals = args.num_evals
+        self.num_envs = args.num_envs
         print(f"Observation size: {self.obs_size}")
 
 
@@ -113,6 +116,13 @@ def main() -> None:
         help="Lower this for short runs (e.g. curriculum phases) -- see the note "
         "on DCUBOT_NUM_EVALS: training won't stop near num_timesteps if "
         "num_timesteps/num_evals is smaller than brax's ~163,840-step chunk.",
+    )
+    parser.add_argument(
+        "--num_envs",
+        type=int,
+        default=DCUBOT_NUM_ENVS,
+        help="Parallel env count -- scale to the GPU's VRAM (default 1024, "
+        "safe for a 6GB GPU; raise for a GPU with more VRAM).",
     )
     # parser.add_argument(
     #     "--debug", action="store_true", help="Run in debug mode with minimal parameters"
