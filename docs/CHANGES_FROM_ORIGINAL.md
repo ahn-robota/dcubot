@@ -20,29 +20,56 @@ instead (already proven over a real 21M-step run, 2026-10-07). It already
 self-gates on `cmd_norm > 0.01`, same semantics as upstream's
 `reward *= cmd_norm > 0.01`.
 
-## 2. Reference motion is forward-only; commands narrowed to match
+## 2. Omnidirectional reference motion; command ranges from REAL ACHIEVED velocity, not pkl labels
 
-`scripts/inspect_reference.py` run against
-`polynomial_coefficients_slow.pkl` (the pkl `joystick.py` actually uses)
-confirmed: 5 keys, dx in [0.049, 0.098] m/s, dy=0 and dtheta=0 on every key
-(no backward/strafe/turn data at all). Per instruction, command ranges are
-narrowed to match exactly, not widened:
+`joystick.py` uses `polynomial_coefficients_omnidirectional.pkl` (210
+keys, dx/dy/dtheta all nonzero -- forward, backward, strafe, and turn are
+all covered). This supersedes an earlier pass of this file (same day) that
+used a forward-only pkl (`polynomial_coefficients_slow.pkl`, 5 keys,
+dx-only) -- that was a reversion made when the omnidirectional pkl was
+believed to be data-quality broken; it was later restored after finding
+that conclusion was entangled with an unrelated replay-script bug (joint
+remap issue in a visualization script, not the reference data itself; see
+2026-10-20's `reference_motion_generator/omnidirectional_phase1_report.md`
+for the original sweep, and project memory for the restoration). The user
+explicitly wants the same training structure as upstream
+open_duck_mini_v2, which trains omnidirectionally (confirmed: upstream's
+own pkl has 240 keys, dx -0.148..0.222, dy -0.111..0.111, dtheta
+-1.111..1.222).
+
+Command ranges are NOT the pkl's raw intention labels -- they're each
+axis's REAL ACHIEVED velocity, checked directly against the pure
+single-axis recordings' own `Vel_x`/`Vel_y`/`Yaw` fields in
+`reference_motion_generator/recordings_omnidirectional/`:
+
+| axis | intention label range | real achieved range | ratio |
+|------|------------------------|----------------------|-------|
+| dx (fwd/back) | 0.098-0.294 | 0.100-0.300 | ~1.0x (clean) |
+| dy (strafe)   | 0.098-0.294 | 0.057-0.158 | ~0.55x |
+| dtheta (turn) | 0.98-1.961  | 0.024-0.103 rad/s | ~0.03-0.05x |
+
+dx and dy are close enough to 1:1 (or a consistent linear scale) to use
+directly. dtheta is NOT: commanding near the label's scale (up to 1.961
+rad/s) would ask for a turn rate the gait never gets close to (real
+achieved is only ~0.03-0.1 rad/s), putting `tracking_ang_vel` (rewarding
+fast turning) and `imitation` (rewarding the much-slower reference gait)
+into direct conflict. So the config is:
 
 ```
-lin_vel_x = [0.049, 0.098]
-lin_vel_y = [0.0, 0.0]
-ang_vel_yaw = [0.0, 0.0]
+lin_vel_x = [-0.20, 0.30]
+lin_vel_y = [-0.158, 0.158]
+ang_vel_yaw = [-0.103, 0.103]
 ```
 
-A true omnidirectional reference motion remains future work. It was
-attempted on 2026-10-20 (`reference_motion_generator/
-omnidirectional_phase1_report.md`): a 210-combo dx*dy*dtheta sweep was
-built, but per-combo achieved velocity turned out to be dominated by noise
-once all three axes were pushed to their extremes simultaneously (e.g. one
-dtheta value's 42 combos averaged to near-zero net turning despite a large
-intended dtheta), and `PolyReferenceMotion.process()`'s dense-grid
-requirement means recordings can't simply be relabeled by real achieved
-velocity without breaking the grid. Not resolved; not used here.
+One consequence of the `ang_vel_yaw` choice: at this achieved scale,
+`PolyReferenceMotion.vel_to_index`'s nearest-neighbor snap mostly lands on
+the dtheta=0 (straight-gait) reference frame, since 0.103 is much closer
+to the grid's 0 point than to its next label (0.98). Turning is therefore
+driven mostly by `tracking_ang_vel`, with `imitation` contributing little
+guidance for that axis specifically -- a data limitation of the current
+Placo sweep (its dtheta parameter isn't a direct rad/s dial), not a code
+bug. Revisiting the sweep generation for faster real turning is future
+work.
 
 ## 3. Head command is 3-dim (not 4-dim), ranges from dcubot's own joint limits
 
@@ -64,17 +91,19 @@ No reward currently penalizes head tracking error (`cost_head_pos` is not
 wired into `joystick.py`'s `_get_reward`), so this had no effect on past
 training outcomes -- it only matters once/if a head-tracking cost is added.
 
-## 4. tracking_sigma lowered 0.01 -> 0.004
+## 4. tracking_sigma kept at upstream's 0.01
 
-Upstream's sigma=0.01 was tuned for a command range of roughly +-0.15 m/s
-(span 0.3). dcubot's forward-only range (0.049-0.098, span 0.049, max
-magnitude 0.098) is 3-6x narrower. Keeping sigma=0.01 unchanged would make
-`reward_tracking_lin_vel` proportionally far more forgiving for dcubot: a
-worst-case tracking error equal to dcubot's *entire* command range would
-still score `exp(-0.0096/0.01) ~= 0.38`, versus upstream's own worst-case
-relative error scoring `exp(-0.0225/0.01) ~= 0.11`. Lowering sigma to 0.004
-restores comparable relative sensitivity
-(`exp(-0.0096/0.004) ~= 0.095`, close to upstream's ~0.11).
+An earlier pass of this file (same day) lowered sigma to 0.004 to
+compensate for the forward-only command range being much narrower than
+upstream's. With the omnidirectional ranges above, `lin_vel_x`'s max
+magnitude (0.30) and `lin_vel_y`'s (0.158) are close enough to upstream's
+own (0.222/0.111) that upstream's sigma=0.01 is a reasonable fit again.
+`ang_vel_yaw`'s range (+-0.103) is much narrower than upstream's
+(+-1.111..1.222) -- sigma=0.01 will be proportionally more forgiving for
+turning than for forward/strafe tracking, but since the real achievable
+turn rate is tiny in absolute terms anyway, absolute errors stay small
+regardless, so this isn't expected to be a major issue in practice. Watch
+turning behavior quality as a flag for revisiting this.
 
 `y_tol=0.1` in `reward_tracking_lin_vel` is left unchanged per instruction,
 pending a reference-replay measurement of how much the reference itself
