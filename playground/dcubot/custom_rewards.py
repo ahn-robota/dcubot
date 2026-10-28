@@ -63,3 +63,34 @@ def reward_imitation_dcubot(
             + 0.5 * jp.exp(-2.0 * jp.square(base_local_angvel[2] - ref_ang[2]))
         )
     return jp.nan_to_num(reward * (move_cmd_norm > 0.01))
+
+
+def reward_feet_gait(
+    gait_step, dt, period, contact, command,
+    offsets=(0.75, 0.25), stance_threshold=0.56, command_threshold=0.02,
+):
+    """Reward foot contact that matches an alternating stance/swing schedule
+    (left/right half a cycle apart), as in Unitree's mjlab velocity task.
+
+    Default offsets put the schedule in phase with the omnidirectional
+    reference's own foot contacts (95% of gait steps agree; offsets (0, 0.5)
+    agree on only 55%), so it does not fight the imitation contact term.
+    """
+    global_phase = gait_step * dt / period
+    leg_phase = (global_phase + jp.array(offsets)) % 1.0
+    is_stance = leg_phase < stance_threshold
+    match = (is_stance == contact).astype(jp.float32)
+    active = jp.linalg.norm(command[:3]) > command_threshold
+    return jp.mean(match) * active
+
+
+def cost_feet_clearance_dcubot(
+    foot_z, foot_vel, target_z, command, command_threshold=0.02
+):
+    """Penalize swing-foot height deviating from target_z, weighted by the
+    foot's horizontal speed (planted feet are not penalized). Only while a
+    move command is given."""
+    vel_norm = jp.linalg.norm(foot_vel[..., :2], axis=-1)
+    cost = jp.sum(jp.abs(foot_z - target_z) * vel_norm)
+    active = jp.linalg.norm(command[:3]) > command_threshold
+    return jp.nan_to_num(cost * active)

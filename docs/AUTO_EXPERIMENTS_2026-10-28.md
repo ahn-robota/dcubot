@@ -49,7 +49,28 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | exp03 | `alive` 20 -> 5 | 10.8M (stopped) | -0.02 (all checkpoints 0.00 +-0.02, no falls) | balance learned faster than baseline (ep_len 500 at 9M vs 438), still no command following |
 | exp04 | exp03 + imitation shaping: joint-pos kernel 0.1 -> 1.0, upstream's base-velocity terms | 0 (stopped) | -- | replaced by the direction curriculum below (same reward) |
 | cur1 | exp04 reward, **forward only**: `--lin_vel_x 0.05 0.3 --lin_vel_y 0 0 --ang_vel_yaw 0 0` | 7.2M (stopped) | 0.00 (fwd vx 0.000 at every checkpoint; checked in the training env too) | balance OK (ep_len 272 at 5.4M), imitation creeping up 1.45 -> 1.58/step, swing 1.9 -> 3.3, but no forward motion |
-| cur1b | cur1 restored from its 7.2M checkpoint, forward range of the old walking runs: `--lin_vel_x 0.05 0.1` | 12.6M planned | | running |
+| cur1b | cur1 restored from its 7.2M checkpoint, forward range of the old walking runs: `--lin_vel_x 0.05 0.1` | 1.8M (stopped) | fwd 0.08 -> vx +0.001 (eval `--scale 0.4`) | ep_len 409, feet in contact 99% of the time, foot bodies move ~5 mm: it never lifts a foot |
+| cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 12.6M planned | | running |
+
+### cur1c: rewards for lifting the feet
+
+The removed `compare_original_vs_dcubot.md` (deleted in `314d246`) records
+that the pre-restart dcubot walking runs had three rewards upstream doesn't:
+`feet_air_time` 2.0, `feet_gait` 6.0, `feet_clearance` -5.0, all gated on a
+move command. They were dropped in the restart for structural fidelity
+(CHANGES #5), and nothing has since paid the policy to lift a foot -- every
+policy here keeps both feet down 99% of the time. Restored:
+
+- `feet_air_time`: `common/rewards.py` `reward_feet_air_time` (unchanged).
+- `feet_gait`: old dcubot version (contact matching an alternating
+  stance/swing schedule). Its default offsets (0, 0.5) agree with the
+  omnidirectional reference's foot contacts on only 55% of gait steps;
+  offsets (0.75, 0.25) agree on 95%, so they no longer fight imitation's
+  contact term. Standing still scores half (3.0/step), stepping on schedule
+  6.0/step.
+- `feet_clearance`: old dcubot version (swing-foot height error weighted by
+  horizontal foot speed), target foot-site height 0.07 m (0.040 at the
+  home pose, i.e. a 3 cm swing).
 
 ### cur1: still no forward motion
 

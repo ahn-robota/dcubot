@@ -155,8 +155,13 @@ from playground.common.rewards import (
     cost_action_rate,
     cost_stand_still,
     reward_alive,
+    reward_feet_air_time,
 )
-from playground.dcubot.custom_rewards import reward_imitation_dcubot
+from playground.dcubot.custom_rewards import (
+    reward_imitation_dcubot,
+    reward_feet_gait,
+    cost_feet_clearance_dcubot,
+)
 
 # See module docstring deviation #1: upstream's own reward_imitation is
 # layout-incompatible with dcubot's pkl, reward_imitation_dcubot used instead.
@@ -202,6 +207,11 @@ def default_config() -> config_dict.ConfigDict:
                 stand_still=-0.2,
                 alive=5.0,  # auto exp03: 20 -> 5 (upstream 20), see docs/AUTO_EXPERIMENTS_2026-10-28.md
                 imitation=1.0,
+                # auto cur1c: restored from the pre-restart dcubot walking runs
+                # (not in upstream), see docs/AUTO_EXPERIMENTS_2026-10-28.md
+                feet_air_time=2.0,
+                feet_gait=6.0,
+                feet_clearance=-5.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
         ),
@@ -211,6 +221,7 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
+        feet_clearance_target_z=0.07,  # m, foot site; 0.040 at the home pose -> 3 cm swing
         # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
         # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
         # widened past the achieved scale (0.103) toward upstream's
@@ -680,6 +691,19 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 self.get_actuator_joints_qvel(data.qvel),
                 self._default_actuator,
                 ignore_head=False,
+            ),
+            "feet_air_time": reward_feet_air_time(
+                info["feet_air_time"], first_contact, info["command"]
+            ),
+            "feet_gait": reward_feet_gait(
+                info["gait_step"], self.dt, self._config.gait_period, contact,
+                info["command"],
+            ),
+            "feet_clearance": cost_feet_clearance_dcubot(
+                data.site_xpos[self._feet_site_id][..., -1],
+                data.sensordata[self._foot_linvel_sensor_adr],
+                self._config.feet_clearance_target_z,
+                info["command"],
             ),
         }
 
