@@ -74,11 +74,16 @@ def run(onnx_path, command):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("onnx", nargs="+")
+    parser.add_argument(
+        "--scale", type=float, default=1.0,
+        help="multiply every command, e.g. 0.4 for a policy trained on 0.05-0.1 m/s",
+    )
     args = parser.parse_args()
 
     for onnx_path in args.onnx:
         ratios, falls, rows = [], 0, []
         for name, command, axis in COMMANDS:
+            command = tuple(c * args.scale for c in command)
             mean, fell_at = run(onnx_path, command)
             falls += fell_at is not None
             if axis is not None:
