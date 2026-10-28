@@ -91,19 +91,34 @@ see docs/CHANGES_FROM_ORIGINAL.md for the full table):
    head_pitch/head_yaw +-1.570796), not copied from upstream's duck-specific
    neck/head ranges.
 
-4. **tracking_sigma kept at upstream's 0.01** (not lowered, unlike this
-   file's earlier forward-only pass): with the omnidirectional command
-   ranges above, lin_vel_x's max magnitude (0.30) and lin_vel_y's (0.158)
-   are now close enough to upstream's own (0.222/0.111) that upstream's
-   sigma is a reasonable fit again. ang_vel_yaw's range (+-0.103) is much
-   narrower than upstream's (+-1.111-1.222) -- sigma=0.01 will be
-   proportionally more forgiving for turning than for forward/strafe, but
-   since real achievable turn rate is tiny in absolute terms anyway,
-   absolute errors stay small regardless, so this isn't expected to be a
-   major issue in practice; flagged here in case turning behavior looks
-   under-trained. `y_tol`=0.1 (reward_tracking_lin_vel) left unchanged per
-   the user's own instruction, pending a reference-replay measurement of
-   lateral wobble.
+4. **tracking_sigma lowered 0.01 -> 0.003, ang_vel_yaw widened 0.103 -> 0.3
+   (2026-10-28 experiment, see docs/RESULTS_omni_1024_50m.md)**: the 50M-step
+   main run (and the 3.6M laptop verification run) both converged to a
+   policy that stands still regardless of command, confirmed via direct
+   command-following tests (near-zero world-frame velocity under fixed
+   commands). Root-cause analysis found `tracking_sigma=0.01` was kept at
+   upstream's value, but upstream's command ranges are all comfortably
+   larger than `sqrt(sigma)=0.1`, while dcubot's `ang_vel_yaw` range
+   (+-0.103, set from real-achieved-velocity per deviation #2) is almost
+   exactly 1 sigma-width -- so standing still already scores ~0.37 reward
+   even at the command extreme for that axis, barely distinguishing "stand"
+   from "turn." This combines two of the two candidate fixes discussed:
+   lowering sigma sharpens the reward within the already-achievable range
+   (honest fix, doesn't ask for anything physically impossible), and
+   widening ang_vel_yaw's range creates stronger gradient pressure toward
+   turning as fast as the gait can manage, even though the robot still
+   can't reach the new range's extreme (real achieved max is ~0.103) --
+   accepted as intentional: the point is to make "turn as much as you can"
+   score meaningfully better than "stand," not to make 0.3 rad/s achievable.
+   This does NOT fully explain the lin_vel axes also staying near-zero
+   (their sigma ratios were already comparable to upstream) -- `alive`
+   dominance (~98% of total reward) and/or training scale (1024 envs/52.3M
+   steps here vs upstream's up to 8192 envs/300M steps) remain candidates
+   for that part, not addressed by this change. This is an experiment, not
+   a settled decision -- see the results doc for the short-run outcome
+   before deciding whether to carry it into another main-training attempt.
+   `y_tol`=0.1 (reward_tracking_lin_vel) left unchanged per the user's own
+   instruction, pending a reference-replay measurement of lateral wobble.
 
 5. **feet_air_time/feet_gait/feet_clearance dropped**: these were
    dcubot-specific additions (not in upstream open_duck_mini_v2/joystick.py
@@ -188,7 +203,7 @@ def default_config() -> config_dict.ConfigDict:
                 alive=20.0,  # upstream's value (dcubot had lowered this to 8.0 for the now-removed standing dispatch)
                 imitation=1.0,
             ),
-            tracking_sigma=0.01,  # see deviation #4 above
+            tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
         ),
         push_config=config_dict.create(
             enable=True,
@@ -196,11 +211,13 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        # Based on each axis's REAL ACHIEVED velocity, not the pkl's
-        # intention labels -- see deviation #2 above.
+        # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
+        # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
+        # widened past the achieved scale (0.103) toward upstream's
+        # proportions -- see deviation #4 (2026-10-28 experiment).
         lin_vel_x=[-0.20, 0.30],
         lin_vel_y=[-0.158, 0.158],
-        ang_vel_yaw=[-0.103, 0.103],
+        ang_vel_yaw=[-0.3, 0.3],
         # dcubot's own joint limits (xmls/dcubot.xml) -- see deviation #3 above.
         neck_pitch_range=[-0.785398, 0.785398],
         head_pitch_range=[-1.570796, 1.570796],

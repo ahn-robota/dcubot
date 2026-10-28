@@ -77,4 +77,11 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 결과: reward 25.6 → 16M까지 242로 상승, 이후 230~273 / ep_len 575~650에서 평평. 최종 270.9 / 621.2
   - **정책이 속도 명령을 따라 걷지 않음 (제자리에 서서 스텝만 함).** 16.2M / 41.5M / 최종 모두 학습 환경에서 확인. 자세한 내용: [`docs/RESULTS_omni_1024_50m.md`](docs/RESULTS_omni_1024_50m.md)
   - 체크포인트 30개(+ `.onnx`): 실습실 PC `checkpoints/omni_1024_50m/` (git에 없음)
-- [ ] 다음: 제자리 서기 원인 확인 (노트북 검증 정책도 그랬는지, 원본과 명령 범위·`tracking_sigma` 비교). 보상·명령 범위 변경은 승인 후
+- [x] 제자리 서기 원인 확인 (노트북): 3.6M 정책도 처음부터 안 걸음(후진/좌측 속도 거의 0, 전진은 넘어짐) → 16M 이후 생긴 문제 아님. 원본과 비교: `tracking_sigma=0.01`은 원본 값 그대로인데, `ang_vel_yaw` 범위(±0.103)가 `sqrt(sigma)=0.1`과 거의 같아서 가만히 있어도 회전 보상을 거의 다 받음 (원본은 범위가 sqrt(sigma)의 10배라 거의 안 받음). lin_vel_x/y는 원본과 비슷한 비율이라 이것만으로 전부 설명은 안 됨 (`alive` 비중 98%, 학습 규모 차이도 후보). 자세한 내용: [`docs/RESULTS_omni_1024_50m.md`](docs/RESULTS_omni_1024_50m.md)
+- [ ] 다음 (사용자 승인됨, **아직 검증 안 됨**): `tracking_sigma` 0.01→0.003, `ang_vel_yaw` 범위 ±0.103→±0.3로 조합 테스트. 노트북에서 2M 스텝 검증 학습 시작했으나 사용자가 자리를 비워 **초기화(step 0)만 찍고 중단**, 체크포인트/로그 삭제함. **실습실 PC에서 이어서 돌려줘**:
+  ```bash
+  XLA_PYTHON_CLIENT_MEM_FRACTION=<PC별 값> uv run python -u -m playground.dcubot.runner \
+    --task flat_terrain_train --num_envs <N> \
+    --output_dir checkpoints/sigma_fix_test --num_timesteps 2000000 --num_evals 12
+  ```
+  끝나면 고정 명령으로 8초 굴려서 월드좌표 속도가 실제로 명령을 따라가는지 확인 (방법은 `docs/RESULTS_omni_1024_50m.md`의 "Command-tracking check" 참고). 결과 보고 다음 결정.
