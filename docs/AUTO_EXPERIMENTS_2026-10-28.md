@@ -72,6 +72,18 @@ policy here keeps both feet down 99% of the time. Restored:
   horizontal foot speed), target foot-site height 0.07 m (0.040 at the
   home pose, i.e. a 3 cm swing).
 
+**First command-following policy** (cur1c 1.8M, MjInfer, 8 s, no pushes):
+
+| fwd command | achieved | foot contact L / R | max foot lift |
+|---|---|---|---|
+| 0.00 | 0.001 m/s | 0.94 / 0.85 | ~0 mm |
+| 0.05 | 0.011 m/s | 0.85 / 0.71 | 2 mm |
+| 0.08 | 0.030 m/s | 0.76 / 0.72 | 2 mm |
+| 0.10 | 0.035 m/s | 0.66 / 0.75 | 1 mm |
+
+Speed now scales with the command and it stands on a zero command; feet
+leave the ground 25-35% of the time (was 1%) but barely lift -- a shuffle.
+
 ### cur1: still no forward motion
 
 Ruled out along the way: the reference's joint-speed demand is not what
