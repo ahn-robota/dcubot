@@ -77,8 +77,69 @@ command range. To check next:
 
 - Did the laptop verification run (3.6M) policy walk? If not, this was there
   from the start.
+
+  **Checked (2026-10-28, laptop).** Same test, laptop's final checkpoint
+  (`checkpoints_verify_omnidirectional/2026_10_27_053737_3604480.onnx`),
+  `Joystick`/`flat_terrain_train`, pushes on, 8s, mean world linvel after 2s:
+
+  | command | mean world linvel | done |
+  |---|---|---|
+  | fwd 0.3 | (-0.049, -0.032, -0.063) | **1.0 (fell)** |
+  | fwd 0.15 | (-0.047, -0.031, -0.040) | **1.0 (fell)** |
+  | back -0.2 | (-0.0008, 0.0002, 0.0000) | 0.0 |
+  | left 0.158 | (-0.0001, 0.003, 0.00003) | 0.0 |
+
+  So: not walking even at 3.6M -- backward/left already show the same
+  near-zero velocity as the 52.3M policy; forward commands fall rather than
+  stand (less trained, more exposed to `push_config` kicks). This confirms
+  the problem was present from early in training, not something that
+  emerged only after 16M -- consistent with a structural cause (command
+  range / `tracking_sigma` / `alive` dominance) rather than "just needs
+  more steps."
 - Compare with upstream: command ranges vs `tracking_sigma`, and upstream's
   300M steps / 8192 envs.
+
+  **Checked (2026-10-28, laptop).** Upstream (`open_duck_mini_v2/joystick.py`):
+  `tracking_sigma=0.01` (same value dcubot currently uses), `lin_vel_x=[-0.15,0.15]`,
+  `lin_vel_y=[-0.2,0.2]`, `ang_vel_yaw=[-1.0,1.0]`, `alive=20.0` (same as dcubot).
+
+  `reward_tracking_*` is `exp(-error^2/sigma)` -- an ABSOLUTE error scale,
+  independent of the command range. So standing still (v=0) when commanded
+  `cmd` scores `exp(-cmd^2/sigma)`. The ratio `max_command / sqrt(sigma)`
+  (sqrt(0.01)=0.1 for both) says how much that reward actually drops at
+  the edge of the command range -- a low ratio means even the extreme
+  command barely distinguishes "stand" from "comply":
+
+  | axis | upstream range | upstream ratio | dcubot range | dcubot ratio |
+  |---|---|---|---|---|
+  | lin_vel_x | +-0.15 | 1.5 | [-0.20, 0.30] | 2.0-3.0 |
+  | lin_vel_y | +-0.2 | 2.0 | +-0.158 | 1.58 |
+  | ang_vel_yaw | +-1.0 | **10.0** | +-0.103 | **1.03** |
+
+  `lin_vel_x`/`lin_vel_y` are roughly in the same ballpark as upstream (not
+  the likely culprit by themselves). `ang_vel_yaw` is the outlier: at
+  upstream's ratio of 10, standing still at the command extreme scores
+  `exp(-100)` (~0) -- essentially forced to turn to get any
+  `tracking_ang_vel` reward. At dcubot's ratio of ~1, standing still at the
+  command extreme already scores `exp(-1)` ~= 0.37, and for the ~40% of
+  draws with `|cmd| < 0.1` (within the command's own 0.2-0.29 span) it
+  scores well above that. Combined with `alive` being ~98% of total reward,
+  there's very little pressure left to actually move for this axis -- this
+  matches deviation #2's own module-docstring caveat in `joystick.py`
+  ("ang_vel_yaw... driven mostly by tracking_ang_vel... not expected to be
+  a major issue in practice"), which this result suggests was too
+  optimistic.
+
+  This does NOT fully explain why forward/backward/strafe also show ~0
+  velocity, though (their ratios aren't obviously bad vs upstream). Two
+  candidates, not distinguished yet: (a) `alive`'s outsized share of reward
+  makes standing a safe/cheap optimum regardless of axis, and the policy
+  generalizes "don't move" across all axes once it learns that for
+  `ang_vel_yaw`; (b) training scale -- 52.3M steps / 1024 envs here vs
+  upstream's up to 300M steps / 8192 envs (far more parallel exploration),
+  so dcubot's policy may simply not have had enough exploration pressure to
+  find/commit to the riskier "actually walk" strategy regardless of the
+  sigma issue above.
 - Any reward/command change needs approval and an entry in
   `docs/CHANGES_FROM_ORIGINAL.md`.
 
