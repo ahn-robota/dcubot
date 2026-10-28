@@ -48,7 +48,20 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | exp02 | `alive` 20 -> 2 | 1.8M (stopped) | 0.00 (turn -0.05/+0.07) | stopped: costs exceed rewards, see below |
 | exp03 | `alive` 20 -> 5 | 10.8M (stopped) | -0.02 (all checkpoints 0.00 +-0.02, no falls) | balance learned faster than baseline (ep_len 500 at 9M vs 438), still no command following |
 | exp04 | exp03 + imitation shaping: joint-pos kernel 0.1 -> 1.0, upstream's base-velocity terms | 0 (stopped) | -- | replaced by the direction curriculum below (same reward) |
-| cur1 | exp04 reward, **forward only**: `--lin_vel_x 0.05 0.3 --lin_vel_y 0 0 --ang_vel_yaw 0 0` | 10.8M planned | | running |
+| cur1 | exp04 reward, **forward only**: `--lin_vel_x 0.05 0.3 --lin_vel_y 0 0 --ang_vel_yaw 0 0` | 7.2M (stopped) | 0.00 (fwd vx 0.000 at every checkpoint; checked in the training env too) | balance OK (ep_len 272 at 5.4M), imitation creeping up 1.45 -> 1.58/step, swing 1.9 -> 3.3, but no forward motion |
+| cur1b | cur1 restored from its 7.2M checkpoint, forward range of the old walking runs: `--lin_vel_x 0.05 0.1` | 12.6M planned | | running |
+
+### cur1: still no forward motion
+
+Ruled out along the way: the reference's joint-speed demand is not what
+separates the old walking runs from these -- the old forward-only
+`polynomial_coefficients_slow.pkl` asks for the same 13-15 rad/s peaks,
+over the 5.24 rad/s limit on 45-50% of gait steps. Physical capacity is
+fine too (1.36 kg robot, 3.23 Nm per servo; open-loop reference playback
+saturates hip_pitch/knee/ankle 4-18% of the time with ~0.1 rad tracking
+error). The clearest remaining difference from the user's earlier
+forward-walking runs is the commanded speed: 0.05-0.10 m/s there vs
+0.05-0.30 here.
 
 ### Direction curriculum (user's idea, 2026-10-28 18:40)
 
@@ -70,7 +83,10 @@ previous stage's last checkpoint (`--restore_checkpoint_path`):
 4. cur4 + turn: yaw [-0.3, 0.3]
 
 Move to the next stage once the current direction's eval ratio is >= 0.5
-(or the stage's steps run out). `runner.py` gained `--lin_vel_x/--lin_vel_y/
+(or the stage's steps run out). Budget (user extended the run to
+2026-10-29 ~18:45, ~70M steps at ~814 steps/s): cur1 up to ~15M, cur2-4 up
+to ~12M each, then all directions mixed for the rest. A stage that is not
+there yet at its launch length is continued from its last checkpoint. `runner.py` gained `--lin_vel_x/--lin_vel_y/
 --ang_vel_yaw MIN MAX` for this (passed to `Joystick(config_overrides=...)`).
 
 ### exp03: the policy never finds the gait
