@@ -72,7 +72,9 @@ uv run tensorboard --logdir checkpoints/<실험이름>
 - [x] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교 (일치, `docs/VERIFICATION_2026-10-27.md` 하단)
 - [x] 실습실 PC `num_envs` 결정: 1024 (2048은 메모리 부족, 자세한 내용은 `docs/VERIFICATION_2026-10-27.md` 하단)
 - [x] 실습실 PC 1024 처리량 측정: 768 steps/s (노트북 495) → 50M 약 18시간
-- [ ] 실습실 PC 본 학습 **진행 중**: `omni_1024_50m`, 2026-10-27 15:21 시작, 예상 종료 10-28 오전 9~10시
-  - 설정: 50M 스텝, `--num_envs 1024`, `--num_evals` 기본 30, MEM_FRACTION 0.85, 그 외는 노트북 검증과 동일
-  - 실습실 PC tmux 세션 `train`: 창 `train`(학습), 창 `tensorboard`(포트 6006)
-  - 로그·체크포인트: `checkpoints/omni_1024_50m/` (`train.log`에 STEP 줄)
+- [x] 실습실 PC 본 학습 `omni_1024_50m` 완료: 2026-10-27 15:21 ~ 10-28 09:39 (약 18시간, 52,264,960 스텝, 오류 없음)
+  - 설정: `--num_timesteps 50000000`, `--num_envs 1024`, `--num_evals` 기본 30, MEM_FRACTION 0.85, 그 외는 노트북 검증과 동일
+  - 결과: reward 25.6 → 16M까지 242로 상승, 이후 230~273 / ep_len 575~650에서 평평. 최종 270.9 / 621.2. 최고 273.0 / 639.9 (41,451,520)
+  - 16M 이후에도 tracking_ang_vel은 오르고 action_rate·torques 벌점은 계속 줄었음. imitation·swing_peak(발 드는 높이)는 조금씩 낮아짐
+  - 체크포인트 30개(+ `.onnx`): 실습실 PC `checkpoints/omni_1024_50m/` (git에 없음)
+- [ ] 다음: 체크포인트 걸음을 MuJoCo 뷰어로 확인(최종, 41.5M 등), 추가 학습 여부 결정
