@@ -32,4 +32,5 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 
 | run | change vs. master `ba2fc7a` | steps | best tracking | verdict |
 |---|---|---|---|---|
-| exp01 | none (sigma 0.003, ang_vel_yaw +-0.3 as committed by the laptop) | ~12.6M | | running |
+| exp01 | none (sigma 0.003, ang_vel_yaw +-0.3 as committed by the laptop) | 3.6M (stopped) | 0.00 (0 / 1.8M / 3.6M all 0.00, no falls) | stopped early: same as baseline at this stage, and alive dominance untouched -- would need >16M to judge |
+| exp02 | `alive` 20 -> 2 | 9.0M planned | | running |

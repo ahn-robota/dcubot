@@ -200,7 +200,7 @@ def default_config() -> config_dict.ConfigDict:
                 torques=-1.0e-3,
                 action_rate=-0.5,
                 stand_still=-0.2,
-                alive=20.0,  # upstream's value (dcubot had lowered this to 8.0 for the now-removed standing dispatch)
+                alive=2.0,  # auto exp02: 20 -> 2 (upstream 20), see docs/AUTO_EXPERIMENTS_2026-10-28.md
                 imitation=1.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
