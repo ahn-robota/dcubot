@@ -78,12 +78,19 @@ def main():
         "--scale", type=float, default=1.0,
         help="multiply every command, e.g. 0.4 for a policy trained on 0.05-0.1 m/s",
     )
+    parser.add_argument(
+        "--turn", type=float, default=None,
+        help="turn command magnitude in rad/s, applied after --scale (a scaled-down "
+        "turn command can be smaller than the robot's own yaw drift)",
+    )
     args = parser.parse_args()
 
     for onnx_path in args.onnx:
         ratios, falls, rows = [], 0, []
         for name, command, axis in COMMANDS:
             command = tuple(c * args.scale for c in command)
+            if axis == 2 and args.turn is not None:
+                command = (0.0, 0.0, np.sign(command[2]) * args.turn)
             mean, fell_at = run(onnx_path, command)
             falls += fell_at is not None
             if axis is not None:
