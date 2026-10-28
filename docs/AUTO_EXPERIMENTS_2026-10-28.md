@@ -33,4 +33,17 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | run | change vs. master `ba2fc7a` | steps | best tracking | verdict |
 |---|---|---|---|---|
 | exp01 | none (sigma 0.003, ang_vel_yaw +-0.3 as committed by the laptop) | 3.6M (stopped) | 0.00 (0 / 1.8M / 3.6M all 0.00, no falls) | stopped early: same as baseline at this stage, and alive dominance untouched -- would need >16M to judge |
-| exp02 | `alive` 20 -> 2 | 9.0M planned | | running |
+| exp02 | `alive` 20 -> 2 | 1.8M (stopped) | 0.00 (turn -0.05/+0.07) | stopped: costs exceed rewards, see below |
+| exp03 | `alive` 20 -> 5 | 9.0M planned | | running |
+
+### exp02: per-step reward clip
+
+The env clips each step's total reward at 0 (`jp.clip(sum * dt, 0, 1e4)`,
+same as upstream). At step 0 with `alive=2` the episode costs (action_rate
+257 + stand_still 15 + torques 2) exceed all rewards (alive 151 + tracking
+26 + imitation 16), so most steps are clipped to exactly 0 and carry no
+learning signal; ep_len at 1.8M was 85.8 vs 95.6 for the baseline. With
+`alive=20` the sum is always positive, which is why upstream never hits the
+clip. `alive=5` keeps the per-step sum positive (~5.5 reward vs ~3.6 cost at
+the start, costs fall as training proceeds) while still giving tracking 4x
+more weight relative to alive than upstream.
