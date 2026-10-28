@@ -53,7 +53,27 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 3.6M (stage done) | **fwd 0.91** (0.08 -> 0.070 m/s) | **walks forward**: 0.05/0.08/0.10 -> 0.046/0.070/0.076 m/s, stands on 0, feet lift 5-9 mm; veers left up to 0.38 m / 8 s |
 | cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 9.0M (stage done) | fwd 1.16 / **back 0.47** (back 0.00 -> 0.01 -> 0.12 -> 0.32 -> 0.45 -> 0.47) | ep_len 541 at 7.2M; forward overshoots slightly (0.08 -> 0.093 m/s) |
 | cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
-| cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M planned | 1.8M: 0.67, no falls on any command (fwd 0.89 / back 0.29 / left 0.87 / right 0.89) | running; turning not learned yet (see below) |
+| cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | most balanced 1.8M: fwd 0.89 / back 0.29 / left 0.87 / right 0.89 / turn 0.01, 0.21, no falls | no falls from 1.8M on; translation peaked at 5.4M (back 0.70) then declined to 12.6M (right -0.14); turning never learned (scores follow a drifting left/right bias) |
+| cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 27M planned | | running |
+
+cur4, every checkpoint with `eval_command_tracking.py --scale 0.4 --turn 0.1`:
+
+| ckpt | fwd | back | left | right | turn L | turn R | falls |
+|---|---|---|---|---|---|---|---|
+| 0 | 1.27 | 0.34 | 0.83 | 0.88 | 0.00 | 0.00 | 2/7 |
+| 1.8M | 0.89 | 0.29 | 0.87 | 0.89 | 0.01 | 0.21 | 0/7 |
+| 3.6M | 1.08 | 0.27 | 1.03 | 0.46 | 0.37 | -0.11 | 0/7 |
+| 5.4M | 1.13 | 0.70 | 1.00 | 0.37 | 1.76 | -1.19 | 0/7 |
+| 7.2M | 1.14 | 0.38 | 0.98 | 0.12 | 1.35 | -0.64 | 0/7 |
+| 9.0M | 0.99 | 0.19 | 1.15 | 0.34 | 0.00 | -0.45 | 0/7 |
+| 10.8M | 1.06 | 0.28 | 1.14 | 0.13 | 0.06 | -0.78 | 0/7 |
+| 12.6M | 0.81 | 0.17 | 1.44 | -0.14 | 0.28 | -1.03 | 0/7 |
+
+Likely cause of the decline: with yaw commands snapping to the straight
+reference key, tracking asks for turning while imitation asks for straight
+stepping. cur5 scales the yaw command x10 before the reference lookup, so
++-0.05..0.1 rad/s selects the +-0.98 turning key (which does use hip_yaw,
+-0.12..+0.10 rad); `tracking_ang_vel` still uses the real command.
 
 ### cur4: turning
 

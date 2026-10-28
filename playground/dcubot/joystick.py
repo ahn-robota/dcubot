@@ -221,7 +221,12 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        feet_clearance_target_z=0.07,  # m, foot site; 0.040 at the home pose -> 3 cm swing
+        feet_clearance_target_z=0.07,
+        # Yaw commands (+-0.1 rad/s) sit far below the reference grid's turning
+        # keys (+-0.98, +-1.96 labels; the 0.98 key really turns ~0.025 rad/s),
+        # so they all snapped to the straight dtheta=0 gait. Scale the yaw
+        # command for the reference lookup only (auto cur5).
+        ref_yaw_scale=10.0,  # m, foot site; 0.040 at the home pose -> 3 cm swing
         # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
         # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
         # widened past the achieved scale (0.103) toward upstream's
@@ -715,7 +720,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             reference_frame = self.PRM.get_reference_motion(
                 info["command"][0],
                 info["command"][1],
-                info["command"][2],
+                info["command"][2] * self._config.ref_yaw_scale,
                 info["gait_step"],
             )
             ret["imitation"] = reward_imitation_dcubot(
