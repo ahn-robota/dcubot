@@ -53,7 +53,28 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 3.6M (stage done) | **fwd 0.91** (0.08 -> 0.070 m/s) | **walks forward**: 0.05/0.08/0.10 -> 0.046/0.070/0.076 m/s, stands on 0, feet lift 5-9 mm; veers left up to 0.38 m / 8 s |
 | cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 9.0M (stage done) | fwd 1.16 / **back 0.47** (back 0.00 -> 0.01 -> 0.12 -> 0.32 -> 0.45 -> 0.47) | ep_len 541 at 7.2M; forward overshoots slightly (0.08 -> 0.093 m/s) |
 | cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
-| cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M planned | | running |
+| cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M planned | 1.8M: 0.67, no falls on any command (fwd 0.89 / back 0.29 / left 0.87 / right 0.89) | running; turning not learned yet (see below) |
+
+### cur4: turning
+
+The 0.4x-scaled eval's turn commands (+-0.04 rad/s) are within the robot's
+own yaw drift, so those two scores are noise. At the full trained rate
+(+-0.1 rad/s) the 1.8M and 3.6M policies turn +-0.01..0.06 rad/s,
+about as much as they drift with no command; adding a yaw command to a
+forward command also stops the forward motion. Likely reason: a yaw
+command of 0.1 snaps to the reference grid's dtheta=0 key (grid 0,
++-0.98, +-1.96), so imitation asks for straight stepping; and even the
+reference's own turning keys only turn ~0.025 rad/s (label 0.98). Only
+`tracking_ang_vel` asks for turning, with no gait to copy -- a
+reference-motion limitation (regenerating it is the user's call).
+
+5.4M (full-rate check, MjInfer 8 s): backward up to 0.70 (eval scale 0.4);
+the policy now turns, but always left -- stand 0 -> wz +0.06 (and creeps
+fwd 0.04 m/s), turn +0.1 -> +0.18, turn -0.1 -> +0.12, strafe right ->
+wz +0.14. Not from the reference (symmetric: mean hip_yaw 0, hip_roll
+-0.004/+0.004) and hardly from the model: right-leg segment CoMs sit 2-4 mm
+closer to the midline than the left (world y L +0.037 vs R -0.033 for
+thigh/shin), whole-body CoM 0.8 mm off center.
 
 ### cur1c: rewards for lifting the feet
 
