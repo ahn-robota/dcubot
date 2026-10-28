@@ -78,8 +78,16 @@ class DcubotRunner(BaseRunner):
         self.env_file = available_envs[args.env]
 
         self.env_config = self.env_file[0].default_config()
-        self.env = self.env_file[1](task=args.task)
-        self.eval_env = self.env_file[1](task=args.task)
+        # Command-range overrides, e.g. for a direction curriculum.
+        overrides = {
+            k: list(getattr(args, k))
+            for k in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw")
+            if getattr(args, k) is not None
+        }
+        self.env = self.env_file[1](task=args.task, config_overrides=overrides)
+        self.eval_env = self.env_file[1](task=args.task, config_overrides=overrides)
+        if overrides:
+            print(f"Command range overrides: {overrides}")
         self.randomizer = randomize.domain_randomize
         self.action_size = self.env.action_size
         self.obs_size = int(
@@ -124,6 +132,15 @@ def main() -> None:
         help="Parallel env count -- scale to the GPU's VRAM (default 1024, "
         "safe for a 6GB GPU; raise for a GPU with more VRAM).",
     )
+    for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
+        parser.add_argument(
+            f"--{name}",
+            type=float,
+            nargs=2,
+            default=None,
+            metavar=("MIN", "MAX"),
+            help=f"override joystick.py's {name} command range",
+        )
     # parser.add_argument(
     #     "--debug", action="store_true", help="Run in debug mode with minimal parameters"
     # )

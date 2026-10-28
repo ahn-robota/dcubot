@@ -47,7 +47,31 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | exp01 | none (sigma 0.003, ang_vel_yaw +-0.3 as committed by the laptop) | 3.6M (stopped) | 0.00 (0 / 1.8M / 3.6M all 0.00, no falls) | stopped early: same as baseline at this stage, and alive dominance untouched -- would need >16M to judge |
 | exp02 | `alive` 20 -> 2 | 1.8M (stopped) | 0.00 (turn -0.05/+0.07) | stopped: costs exceed rewards, see below |
 | exp03 | `alive` 20 -> 5 | 10.8M (stopped) | -0.02 (all checkpoints 0.00 +-0.02, no falls) | balance learned faster than baseline (ep_len 500 at 9M vs 438), still no command following |
-| exp04 | exp03 + imitation shaping: joint-pos kernel 0.1 -> 1.0, upstream's base-velocity terms | 18M planned | | running |
+| exp04 | exp03 + imitation shaping: joint-pos kernel 0.1 -> 1.0, upstream's base-velocity terms | 0 (stopped) | -- | replaced by the direction curriculum below (same reward) |
+| cur1 | exp04 reward, **forward only**: `--lin_vel_x 0.05 0.3 --lin_vel_y 0 0 --ang_vel_yaw 0 0` | 10.8M planned | | running |
+
+### Direction curriculum (user's idea, 2026-10-28 18:40)
+
+Upstream trains every direction at once: each axis sampled uniformly and
+independently, resampled every 500 steps, 10% zero commands -- no
+curriculum. The user's earlier forward-only dcubot runs learned to walk
+forward quickly, while every omnidirectional run so far stands still. With
+random directions, any early stepping motion moves the robot in some
+direction that matches the command only by chance, so on average "move"
+earns nothing over "stand".
+
+Plan: stage-by-stage, **cumulative** command ranges (earlier directions stay
+in the mix so the policy doesn't forget them), each stage restoring the
+previous stage's last checkpoint (`--restore_checkpoint_path`):
+
+1. cur1 forward: x [0.05, 0.3]
+2. cur2 + backward: x [-0.2, 0.3]
+3. cur3 + strafe: y [-0.158, 0.158]
+4. cur4 + turn: yaw [-0.3, 0.3]
+
+Move to the next stage once the current direction's eval ratio is >= 0.5
+(or the stage's steps run out). `runner.py` gained `--lin_vel_x/--lin_vel_y/
+--ang_vel_yaw MIN MAX` for this (passed to `Joystick(config_overrides=...)`).
 
 ### exp03: the policy never finds the gait
 
