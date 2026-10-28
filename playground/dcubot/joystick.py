@@ -700,6 +700,8 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 contact,
                 reference_frame,
                 info["command"],
+                base_local_linvel=self.get_local_linvel(data),
+                base_local_angvel=self.get_gyro(data),
             )
         else:
             ret["imitation"] = jp.zeros(())
