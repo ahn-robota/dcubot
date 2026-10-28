@@ -85,3 +85,7 @@ uv run tensorboard --logdir checkpoints/<실험이름>
     --output_dir checkpoints/sigma_fix_test --num_timesteps 2000000 --num_evals 12
   ```
   끝나면 고정 명령으로 8초 굴려서 월드좌표 속도가 실제로 명령을 따라가는지 확인 (방법은 `docs/RESULTS_omni_1024_50m.md`의 "Command-tracking check" 참고). 결과 보고 다음 결정.
+- [ ] **실습실 PC 자동 실험 진행 중 (2026-10-28 ~ 10-30, 사용자 승인: 36시간 동안 실습실 PC가 직접 학습·평가·코드 수정)**
+  - 작업 브랜치 `auto/2026-10-28` (설정 변경은 여기에만 커밋, master는 이 요약만). 실험별 설정·결과: 브랜치의 `docs/AUTO_EXPERIMENTS_2026-10-28.md`
+  - 명령 따라가기 평가: `scripts/eval_command_tracking.py <policy.onnx ...>` (8초 고정 명령, `tracking` 1.0=완벽, 0=제자리)
+  - 그동안 노트북에서는 `joystick.py`·`runner.py`를 고치지 말 것

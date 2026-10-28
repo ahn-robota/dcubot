@@ -91,19 +91,20 @@ No reward currently penalizes head tracking error (`cost_head_pos` is not
 wired into `joystick.py`'s `_get_reward`), so this had no effect on past
 training outcomes -- it only matters once/if a head-tracking cost is added.
 
-## 4. tracking_sigma kept at upstream's 0.01
+## 4. tracking_sigma 0.01 -> 0.003, ang_vel_yaw range +-0.103 -> +-0.3 (2026-10-28 experiment)
 
-An earlier pass of this file (same day) lowered sigma to 0.004 to
-compensate for the forward-only command range being much narrower than
-upstream's. With the omnidirectional ranges above, `lin_vel_x`'s max
-magnitude (0.30) and `lin_vel_y`'s (0.158) are close enough to upstream's
-own (0.222/0.111) that upstream's sigma=0.01 is a reasonable fit again.
-`ang_vel_yaw`'s range (+-0.103) is much narrower than upstream's
-(+-1.111..1.222) -- sigma=0.01 will be proportionally more forgiving for
-turning than for forward/strafe tracking, but since the real achievable
-turn rate is tiny in absolute terms anyway, absolute errors stay small
-regardless, so this isn't expected to be a major issue in practice. Watch
-turning behavior quality as a flag for revisiting this.
+Upstream's sigma=0.01 was kept at first. The 50M-step main run
+(`docs/RESULTS_omni_1024_50m.md`) and the 3.6M laptop verification run both
+learned to stand still regardless of command. `reward_tracking_*` is
+`exp(-err^2 / sigma)` with an absolute error scale, so standing still under a
+command `c` scores `exp(-c^2 / sigma)`. Upstream's command ranges are well
+beyond `sqrt(sigma)=0.1` (ang_vel_yaw +-1.0, ratio 10), but dcubot's
+real-achieved-velocity ang_vel_yaw range (+-0.103, #2) is ~1 sigma-width:
+standing scores ~0.37 even at the command extreme. Experiment (user-approved,
+not yet validated): sigma 0.003 sharpens tracking on every axis, and
+ang_vel_yaw +-0.3 asks for more turning than the gait reaches (~0.1) so that
+"turn as much as possible" clearly beats "stand". Full reasoning in
+`joystick.py`'s module docstring, deviation #4.
 
 `y_tol=0.1` in `reward_tracking_lin_vel` is left unchanged per instruction,
 pending a reference-replay measurement of how much the reference itself
