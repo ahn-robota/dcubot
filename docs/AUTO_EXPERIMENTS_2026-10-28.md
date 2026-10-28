@@ -52,7 +52,8 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur1b | cur1 restored from its 7.2M checkpoint, forward range of the old walking runs: `--lin_vel_x 0.05 0.1` | 1.8M (stopped) | fwd 0.08 -> vx +0.001 (eval `--scale 0.4`) | ep_len 409, feet in contact 99% of the time, foot bodies move ~5 mm: it never lifts a foot |
 | cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 3.6M (stage done) | **fwd 0.91** (0.08 -> 0.070 m/s) | **walks forward**: 0.05/0.08/0.10 -> 0.046/0.070/0.076 m/s, stands on 0, feet lift 5-9 mm; veers left up to 0.38 m / 8 s |
 | cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 9.0M (stage done) | fwd 1.16 / **back 0.47** (back 0.00 -> 0.01 -> 0.12 -> 0.32 -> 0.45 -> 0.47) | ep_len 541 at 7.2M; forward overshoots slightly (0.08 -> 0.093 m/s) |
-| cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 12.6M planned | | running |
+| cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
+| cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M planned | | running |
 
 ### cur1c: rewards for lifting the feet
 
