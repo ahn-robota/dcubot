@@ -50,7 +50,8 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | exp04 | exp03 + imitation shaping: joint-pos kernel 0.1 -> 1.0, upstream's base-velocity terms | 0 (stopped) | -- | replaced by the direction curriculum below (same reward) |
 | cur1 | exp04 reward, **forward only**: `--lin_vel_x 0.05 0.3 --lin_vel_y 0 0 --ang_vel_yaw 0 0` | 7.2M (stopped) | 0.00 (fwd vx 0.000 at every checkpoint; checked in the training env too) | balance OK (ep_len 272 at 5.4M), imitation creeping up 1.45 -> 1.58/step, swing 1.9 -> 3.3, but no forward motion |
 | cur1b | cur1 restored from its 7.2M checkpoint, forward range of the old walking runs: `--lin_vel_x 0.05 0.1` | 1.8M (stopped) | fwd 0.08 -> vx +0.001 (eval `--scale 0.4`) | ep_len 409, feet in contact 99% of the time, foot bodies move ~5 mm: it never lifts a foot |
-| cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 12.6M planned | | running |
+| cur1c | cur1b + foot rewards of the pre-restart walking runs: `feet_air_time` 2.0, `feet_gait` 6.0 (schedule aligned to the reference contacts), `feet_clearance` -5.0 (target 3 cm swing), restored from cur1b 1.8M | 3.6M (stage done) | **fwd 0.91** (0.08 -> 0.070 m/s) | **walks forward**: 0.05/0.08/0.10 -> 0.046/0.070/0.076 m/s, stands on 0, feet lift 5-9 mm; veers left up to 0.38 m / 8 s |
+| cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 12.6M planned | | running |
 
 ### cur1c: rewards for lifting the feet
 
