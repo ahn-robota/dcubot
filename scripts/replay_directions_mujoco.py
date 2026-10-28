@@ -23,14 +23,18 @@ Two sources, pick with --source:
     Vel_y=0.1075, matching its pure-strafe intent).
   single_axis: the older 2026-10-15 motions_dcubot/ 9-file set (already
     validated via gait_playground separately).
+  pkl: the fitted polynomial_coefficients_omnidirectional.pkl that
+    playground/dcubot/joystick.py actually trains on (in git, so this works
+    on any machine). Joint angles come from the polynomials; the pkl has no
+    base pose, so the base stays at the home keyframe's height/trunk pitch
+    and x/y/yaw are integrated from the pkl's base linear/angular velocity.
 
-NOTE: neither source is what playground/dcubot/joystick.py currently trains
-on -- the active pkl (polynomial_coefficients_slow.pkl) is forward-only (see
-docs/CHANGES_FROM_ORIGINAL.md #2). This script is for inspecting the
-reference *motion data itself*, independent of training state.
+omni/single_axis read raw recordings that live outside the repo (laptop
+only). This script is for inspecting the reference *motion data itself*,
+independent of training state.
 
 Usage (from rl_training/):
-    .venv/bin/python scripts/replay_directions_mujoco.py [--source omni|single_axis]
+    .venv/bin/python scripts/replay_directions_mujoco.py [--source omni|single_axis|pkl]
 """
 
 import argparse
@@ -41,8 +45,21 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
+from playground.common.poly_reference_motion_numpy import PolyReferenceMotion
+
 XML = "playground/dcubot/xmls/scene_flat_terrain.xml"
+PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional.pkl"
 SEGMENT_SECONDS = 3.0
+
+# Same six directions as the "omni" recordings, as (dx, dy, dtheta) pkl keys.
+PKL_SEQUENCE = [
+    ("forward", (0.196, 0.0, 0.0)),
+    ("backward", (-0.196, 0.0, 0.0)),
+    ("strafe_left", (0.0, 0.196, 0.0)),
+    ("strafe_right", (0.0, -0.196, 0.0)),
+    ("turn_left", (0.0, 0.0, 0.98)),
+    ("turn_right", (0.0, 0.0, -0.98)),
+]
 
 SOURCES = {
     "omni": (
@@ -99,19 +116,53 @@ def load_recording(path):
     return root_pos, root_quat_wxyz, joints_pos, fps
 
 
+def load_pkl_motion(prm, command, home_qpos_base):
+    """One SEGMENT_SECONDS clip from the pkl, in load_recording's format.
+
+    Frame layout (see custom_rewards.py / scripts/inspect_reference.py):
+    joints_pos[0:13], joints_vel[13:26], foot_contacts[26:28],
+    base_linear_vel[28:31], base_angular_vel[31:34]; joints in Placo order
+    left leg(5), head(3), right leg(5).
+    """
+    fps = prm.fps
+    n = int(SEGMENT_SECONDS * fps)
+    home_quat = home_qpos_base[3:7]
+    xy, yaw = np.zeros(2), 0.0
+    root_pos, root_quat, joints_pos = [], [], []
+    for i in range(n):
+        ref = np.array(prm.get_reference_motion(*command, i))
+        joints_pos.append(np.concatenate([ref[0:5], ref[8:13], ref[5:8]]))
+        root_pos.append([xy[0], xy[1], home_qpos_base[2]])
+        yaw_quat = np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
+        quat = np.zeros(4)
+        mujoco.mju_mulQuat(quat, yaw_quat, home_quat)
+        root_quat.append(quat)
+        xy += ref[28:30] / fps
+        yaw += ref[33] / fps
+    return np.array(root_pos), np.array(root_quat), np.array(joints_pos), fps
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", choices=list(SOURCES.keys()), default="omni")
+    parser.add_argument(
+        "--source", choices=list(SOURCES.keys()) + ["pkl"], default="omni"
+    )
     args = parser.parse_args()
-    motions_dir, sequence = SOURCES[args.source]
 
     m = mujoco.MjModel.from_xml_path(XML)
     d = mujoco.MjData(m)
     mujoco.mj_resetDataKeyframe(m, d, 0)
 
     recordings = {}
-    for label, fname in sequence:
-        recordings[fname] = load_recording(f"{motions_dir}/{fname}")
+    if args.source == "pkl":
+        prm = PolyReferenceMotion(PKL)
+        sequence = [(label, f"{label} {cmd}") for label, cmd in PKL_SEQUENCE]
+        for (label, name), (_, cmd) in zip(sequence, PKL_SEQUENCE):
+            recordings[name] = load_pkl_motion(prm, cmd, d.qpos[:7].copy())
+    else:
+        motions_dir, sequence = SOURCES[args.source]
+        for label, fname in sequence:
+            recordings[fname] = load_recording(f"{motions_dir}/{fname}")
 
     with mujoco.viewer.launch_passive(m, d, show_left_ui=False, show_right_ui=False) as viewer:
         viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True
