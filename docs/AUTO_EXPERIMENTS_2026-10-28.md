@@ -54,7 +54,22 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 9.0M (stage done) | fwd 1.16 / **back 0.47** (back 0.00 -> 0.01 -> 0.12 -> 0.32 -> 0.45 -> 0.47) | ep_len 541 at 7.2M; forward overshoots slightly (0.08 -> 0.093 m/s) |
 | cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
 | cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | most balanced 1.8M: fwd 0.89 / back 0.29 / left 0.87 / right 0.89 / turn 0.01, 0.21, no falls | no falls from 1.8M on; translation peaked at 5.4M (back 0.70) then declined to 12.6M (right -0.14); turning never learned (scores follow a drifting left/right bias) |
-| cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 27M planned | **5.4M: 0.67** -- fwd 1.15 / back 0.44 / left 1.06 / right 0.66 / turn L 0.40 / turn R 0.32, no falls | running; first checkpoint with every direction (both turns) the right way; stand: no yaw (-0.003) but creeps 0.03 m/s; backward swings left (wz +0.25) |
+| cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 14.4M (stopped) | **5.4M: 0.67** (env eval 0.55) -- fwd 1.15 / back 0.44 / left 1.06 / right 0.66 / turn L 0.40 / turn R 0.32, no falls | first checkpoint with every direction (both turns) the right way; then 7.2M 0.68, 9.0M 0.64, 10.8M 0.53, 12.6M 0.33, 14.4M 0.32 (env eval 0.33) while training reward kept rising |
+| cur6 | cur5 5.4M + tracking weights x2: `tracking_lin_vel` 2.5 -> 5, `tracking_ang_vel` 6 -> 12 | ~9M planned | | running |
+
+### cur5: command following peaks early, then decays
+
+`eval_command_tracking.py` gained `--env N`: N robots in the training env
+itself (noise, delays, pushes; nominal model), averaged. It agrees with the
+single-run eval -- cur5 5.4M 0.55 vs 14.4M 0.33 -- so the decline is real,
+not eval noise. In the training env every per-step term keeps improving
+(lin tracking 0.267 -> 0.356, gait 0.58 -> 0.76, action_rate 1.47 -> 0.69
+from 0 to 10.8M), but those are averaged over random mixed-direction
+commands with gait (6), alive (5) and imitation (~2/step) paying more than
+tracking (2.5 / 6): after ~5-7M the policy trades pure-direction command
+following for them, in cur4 and cur5 alike. cur6 doubles both tracking
+weights from the best cur5 checkpoint. Also visible in the env eval: 30-40%
+of robots fall within 8 s with pushes on.
 
 cur4, every checkpoint with `eval_command_tracking.py --scale 0.4 --turn 0.1`:
 

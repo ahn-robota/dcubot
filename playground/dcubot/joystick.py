@@ -200,8 +200,8 @@ def default_config() -> config_dict.ConfigDict:
         ),
         reward_config=config_dict.create(
             scales=config_dict.create(
-                tracking_lin_vel=2.5,
-                tracking_ang_vel=6.0,
+                tracking_lin_vel=5.0,  # auto cur6: 2.5 -> 5 (upstream 2.5)
+                tracking_ang_vel=12.0,  # auto cur6: 6 -> 12 (upstream 6)
                 torques=-1.0e-3,
                 action_rate=-0.5,
                 stand_still=-0.2,

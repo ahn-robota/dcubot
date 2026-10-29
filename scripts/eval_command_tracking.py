@@ -8,9 +8,17 @@ policy with a tracking score: mean over the moving commands of
 achieved/commanded along the commanded axis (1.0 = perfect, ~0 = stands
 still, negative = wrong way).
 
+With --env N it instead steps N robots in parallel through the training env
+itself (playground/dcubot/joystick.py, task flat_terrain_train: observation
+noise, action/IMU delays and pushes on, nominal model), each from a different
+random seed, and averages over them -- far less noisy than one deterministic
+run, at ~1 min per checkpoint. A robot counts as fallen once the env
+terminates it.
+
 Usage (from rl_training/):
     .venv/bin/python scripts/eval_command_tracking.py <policy.onnx> [...]
     .venv/bin/python scripts/eval_command_tracking.py checkpoints/<run>/*.onnx
+    .venv/bin/python scripts/eval_command_tracking.py --env 256 <policy.onnx>
 """
 
 import argparse
@@ -71,6 +79,45 @@ def run(onnx_path, command):
     return mean, fell_at
 
 
+def run_env(onnx_path, command, n_envs, env_fns={}):
+    """Mean velocity over the robots that stayed up, and the fallen fraction."""
+    import jax
+    import jax.numpy as jp
+    from playground.common.onnx_infer import OnnxInfer
+
+    if not env_fns:
+        from playground.dcubot.joystick import Joystick
+
+        env = Joystick(task="flat_terrain_train")
+        env_fns.update(
+            env=env,
+            reset=jax.jit(jax.vmap(env.reset)),
+            step=jax.jit(jax.vmap(env.step)),
+            vel=jax.jit(jax.vmap(lambda d: jp.concatenate(
+                [env.get_local_linvel(d)[:2], env.get_gyro(d)[2:]]))),
+        )
+    policy = OnnxInfer(onnx_path, awd=True)
+    cmd = jp.tile(jp.array([*command, 0.0, 0.0, 0.0]), (n_envs, 1))
+    state = env_fns["reset"](jax.random.split(jax.random.PRNGKey(0), n_envs))
+    state.info["command"] = cmd
+    fallen = np.zeros(n_envs, bool)
+    vel_sum, vel_n = np.zeros((n_envs, 3)), np.zeros(n_envs)
+    dt = env_fns["env"].dt
+    for i in range(int(SECONDS / dt)):
+        obs = np.asarray(state.obs["state"])
+        action = np.stack([policy.infer(o) for o in obs])
+        state = env_fns["step"](state, jp.asarray(action))
+        state.info["command"] = cmd
+        fallen |= np.asarray(state.done) > 0
+        if (i + 1) * dt > SETTLE_SECONDS:
+            up = ~fallen
+            vel_sum[up] += np.asarray(env_fns["vel"](state.data))[up]
+            vel_n[up] += 1
+    ok = vel_n > 0
+    mean = (vel_sum[ok] / vel_n[ok, None]).mean(axis=0) if ok.any() else np.zeros(3)
+    return mean, fallen.mean()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("onnx", nargs="+")
@@ -83,6 +130,10 @@ def main():
         help="turn command magnitude in rad/s, applied after --scale (a scaled-down "
         "turn command can be smaller than the robot's own yaw drift)",
     )
+    parser.add_argument(
+        "--env", type=int, default=0, metavar="N",
+        help="average N robots in the training env instead of one MjInfer run",
+    )
     args = parser.parse_args()
 
     for onnx_path in args.onnx:
@@ -91,19 +142,26 @@ def main():
             command = tuple(c * args.scale for c in command)
             if axis == 2 and args.turn is not None:
                 command = (0.0, 0.0, np.sign(command[2]) * args.turn)
-            mean, fell_at = run(onnx_path, command)
-            falls += fell_at is not None
+            if args.env:
+                mean, fell_frac = run_env(onnx_path, command, args.env)
+                falls += fell_frac
+                status = f"fell {100 * fell_frac:.0f}%"
+                fell = fell_frac >= 0.5
+            else:
+                mean, fell_at = run(onnx_path, command)
+                falls += fell_at is not None
+                status = f"FELL@{fell_at:.1f}s" if fell_at else "ok"
+                fell = fell_at is not None
             if axis is not None:
-                ratios.append(mean[axis] / command[axis] if fell_at is None else 0.0)
+                ratios.append(mean[axis] / command[axis] if not fell else 0.0)
             rows.append(
                 f"    {name:6s} cmd=({command[0]:+.2f},{command[1]:+.2f},{command[2]:+.2f}) "
-                f"vx={mean[0]:+.3f} vy={mean[1]:+.3f} wz={mean[2]:+.3f} "
-                + (f"FELL@{fell_at:.1f}s" if fell_at else "ok")
+                f"vx={mean[0]:+.3f} vy={mean[1]:+.3f} wz={mean[2]:+.3f} {status}"
             )
         print(
             f"{onnx_path}  tracking={np.mean(ratios):+.2f} "
             f"(fwd/back/left/right/turn_l/turn_r: {' '.join(f'{r:+.2f}' for r in ratios)})  "
-            f"falls={falls}/{len(COMMANDS)}"
+            f"falls={falls:.2f}/{len(COMMANDS)}"
         )
         print("\n".join(rows))
         sys.stdout.flush()
