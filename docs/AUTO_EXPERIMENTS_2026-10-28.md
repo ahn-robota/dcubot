@@ -54,7 +54,7 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur2 | cur1c 3.6M + backward: `--lin_vel_x -0.1 0.1` | 9.0M (stage done) | fwd 1.16 / **back 0.47** (back 0.00 -> 0.01 -> 0.12 -> 0.32 -> 0.45 -> 0.47) | ep_len 541 at 7.2M; forward overshoots slightly (0.08 -> 0.093 m/s) |
 | cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
 | cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | most balanced 1.8M: fwd 0.89 / back 0.29 / left 0.87 / right 0.89 / turn 0.01, 0.21, no falls | no falls from 1.8M on; translation peaked at 5.4M (back 0.70) then declined to 12.6M (right -0.14); turning never learned (scores follow a drifting left/right bias) |
-| cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 27M planned | | running |
+| cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 27M planned | **5.4M: 0.67** -- fwd 1.15 / back 0.44 / left 1.06 / right 0.66 / turn L 0.40 / turn R 0.32, no falls | running; first checkpoint with every direction (both turns) the right way; stand: no yaw (-0.003) but creeps 0.03 m/s; backward swings left (wz +0.25) |
 
 cur4, every checkpoint with `eval_command_tracking.py --scale 0.4 --turn 0.1`:
 
