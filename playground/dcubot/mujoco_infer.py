@@ -121,7 +121,7 @@ class MjInfer(MJInferBase):
                 lin_vel_y = self.COMMANDS_RANGE_Y[1]
             if keycode == 262:  # arrow right
                 lin_vel_y = self.COMMANDS_RANGE_Y[0]
-            if keycode == 81:  # a
+            if keycode == 81:  # q
                 ang_vel = self.COMMANDS_RANGE_THETA[1]
             if keycode == 69:  # e
                 ang_vel = self.COMMANDS_RANGE_THETA[0]
@@ -191,6 +191,12 @@ class MjInfer(MJInferBase):
                 viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_ACTUATOR] = True
                 self.model.vis.scale.jointlength = 0.05
                 self.model.vis.scale.jointwidth = 0.015
+                print(
+                    "keys: up/down = forward/back, left/right = strafe, q/e = turn "
+                    f"left/right, any other key (e.g. space) = stop | ranges x "
+                    f"{self.COMMANDS_RANGE_X} y {self.COMMANDS_RANGE_Y} yaw "
+                    f"{self.COMMANDS_RANGE_THETA}"
+                )
                 counter = 0
                 last_poll = 0.0
                 while True:
@@ -276,6 +282,13 @@ if __name__ == "__main__":
         "Arrow keys jump straight to the ends of the trained ranges.",
     )
 
+    for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
+        parser.add_argument(
+            f"--{name}", type=float, nargs=2, default=None, metavar=("MIN", "MAX"),
+            help=f"key command range for {name} (default: joystick.py's); "
+            "match the range the policy was trained on",
+        )
+
     args = parser.parse_args()
 
     onnx_path = args.onnx_model_path
@@ -291,5 +304,9 @@ if __name__ == "__main__":
             time.sleep(10)
     mjinfer = MjInfer(args.model_path, onnx_path, args.standing)
     mjinfer.watch_dir = args.watch_dir
+    for name, attr in (("lin_vel_x", "COMMANDS_RANGE_X"), ("lin_vel_y", "COMMANDS_RANGE_Y"),
+                       ("ang_vel_yaw", "COMMANDS_RANGE_THETA")):
+        if getattr(args, name) is not None:
+            setattr(mjinfer, attr, list(getattr(args, name)))
     mjinfer.commands[0] = args.vx
     mjinfer.run()
