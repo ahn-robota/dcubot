@@ -85,7 +85,10 @@ uv run tensorboard --logdir checkpoints/<실험이름>
     --output_dir checkpoints/sigma_fix_test --num_timesteps 2000000 --num_evals 12
   ```
   끝나면 고정 명령으로 8초 굴려서 월드좌표 속도가 실제로 명령을 따라가는지 확인 (방법은 `docs/RESULTS_omni_1024_50m.md`의 "Command-tracking check" 참고). 결과 보고 다음 결정.
-- [ ] **실습실 PC 자동 실험 진행 중 (2026-10-28 ~ 10-30, 사용자 승인: 36시간 동안 실습실 PC가 직접 학습·평가·코드 수정)**
-  - 작업 브랜치 `auto/2026-10-28` (설정 변경은 여기에만 커밋, master는 이 요약만). 실험별 설정·결과: 브랜치의 `docs/AUTO_EXPERIMENTS_2026-10-28.md`
-  - 명령 따라가기 평가: `scripts/eval_command_tracking.py <policy.onnx ...>` (8초 고정 명령, `tracking` 1.0=완벽, 0=제자리)
-  - 그동안 노트북에서는 `joystick.py`·`runner.py`를 고치지 말 것
+- [x] **실습실 PC 자동 실험 완료 (2026-10-28 12:30 ~ 10-29 17:10)**: 처음으로 명령을 따라 걷는 정책
+  - 결과·설정·과정 전부: 브랜치 `auto/2026-10-28`의 `docs/AUTO_EXPERIMENTS_2026-10-28.md` ("Final result"). master에는 아직 병합 안 함 (사용자 결정)
+  - 선택된 정책: `cur5` 7.2M (실습실 PC `checkpoints/cur5/2026_10_29_110034_7208960.onnx`, git에 없음). 전진·후진·좌우·좌우회전 모두 명령 방향으로 이동 (느린 범위 ±0.1 m/s, ±0.1 rad/s)
+  - 핵심 원인과 해결: 발 관련 보상(`feet_air_time`/`feet_gait`/`feet_clearance`) 복원, 방향별 단계 학습(전진→후진→좌우→회전), `alive` 5, imitation 보상 수정, 회전 레퍼런스 연결(`ref_yaw_scale`). 브랜치의 `docs/CHANGES_FROM_ORIGINAL.md` #5, #7~#9
+  - 남은 문제: 속도 범위 작음, 밀기(push) 상태에서 8초 내 ~30% 넘어짐, 회전 약하고 좌우 비대칭
+  - 평가: `scripts/eval_command_tracking.py` (브랜치 버전에 `--scale`, `--turn`, `--env N` 추가)
+- [ ] 다음: 브랜치 병합 여부 결정, 속도 범위 넓히기, 외피·머리 배터리 반영한 모델로 이 체크포인트에서 이어서 학습
