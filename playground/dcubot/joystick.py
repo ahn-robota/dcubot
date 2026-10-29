@@ -200,8 +200,8 @@ def default_config() -> config_dict.ConfigDict:
         ),
         reward_config=config_dict.create(
             scales=config_dict.create(
-                tracking_lin_vel=5.0,  # auto cur6: 2.5 -> 5 (upstream 2.5)
-                tracking_ang_vel=12.0,  # auto cur6: 6 -> 12 (upstream 6)
+                tracking_lin_vel=2.5,
+                tracking_ang_vel=6.0,
                 torques=-1.0e-3,
                 action_rate=-0.5,
                 stand_still=-0.2,
@@ -221,12 +221,12 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        feet_clearance_target_z=0.07,
+        feet_clearance_target_z=0.07,  # m, foot site; 0.040 at the home pose -> 3 cm swing
         # Yaw commands (+-0.1 rad/s) sit far below the reference grid's turning
         # keys (+-0.98, +-1.96 labels; the 0.98 key really turns ~0.025 rad/s),
         # so they all snapped to the straight dtheta=0 gait. Scale the yaw
         # command for the reference lookup only (auto cur5).
-        ref_yaw_scale=10.0,  # m, foot site; 0.040 at the home pose -> 3 cm swing
+        ref_yaw_scale=10.0,
         # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
         # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
         # widened past the achieved scale (0.103) toward upstream's

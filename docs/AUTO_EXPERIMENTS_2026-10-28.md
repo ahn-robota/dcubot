@@ -55,7 +55,53 @@ pushes): **tracking** = mean achieved/commanded over those 6 commands
 | cur3 | cur2 9.0M + strafe: `--lin_vel_y -0.1 0.1` | 3.6M (stage done) | fwd 1.27 / back 0.34 / **left 0.83 / right 0.88** | strafe learned within 1.8M (0.75/0.62); backward dipped 0.47 -> 0.33 and stayed |
 | cur4 | cur3 3.6M + turning: `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | most balanced 1.8M: fwd 0.89 / back 0.29 / left 0.87 / right 0.89 / turn 0.01, 0.21, no falls | no falls from 1.8M on; translation peaked at 5.4M (back 0.70) then declined to 12.6M (right -0.14); turning never learned (scores follow a drifting left/right bias) |
 | cur5 | cur4 1.8M + `ref_yaw_scale=10` (yaw command x10 for the reference lookup only), all directions at the slow ranges | 14.4M (stopped) | **5.4M: 0.67** (env eval 0.55) -- fwd 1.15 / back 0.44 / left 1.06 / right 0.66 / turn L 0.40 / turn R 0.32, no falls | first checkpoint with every direction (both turns) the right way; then 7.2M 0.68, 9.0M 0.64, 10.8M 0.53, 12.6M 0.33, 14.4M 0.32 (env eval 0.33) while training reward kept rising |
-| cur6 | cur5 5.4M + tracking weights x2: `tracking_lin_vel` 2.5 -> 5, `tracking_ang_vel` 6 -> 12 | ~9M planned | | running |
+| cur6 | cur5 5.4M + tracking weights x2: `tracking_lin_vel` 2.5 -> 5, `tracking_ang_vel` 6 -> 12 | 9.0M (done) | single-run 0.72 at 5.4M and 9.0M | stronger fwd/left/turn-left, but strafe right broken (-0.00..-0.29 in the env eval); weights reverted after the run |
+
+## Final result (2026-10-29 17:10)
+
+**Chosen policy: cur5 7.2M** -- `checkpoints/cur5/2026_10_29_110034_7208960.onnx`
+on the lab PC (not in git). Its training config is this branch's HEAD
+(`joystick.py` as committed: tracking 2.5/6.0, alive 5, imitation kernel
+1.0 + base-velocity terms, foot rewards, `ref_yaw_scale` 10) with
+`--lin_vel_x -0.1 0.1 --lin_vel_y -0.1 0.1 --ang_vel_yaw -0.1 0.1`.
+Lineage: cur1 -> cur1b -> cur1c -> cur2 -> cur3 -> cur4 (1.8M) -> cur5, each
+restoring the previous stage's checkpoint.
+
+Final comparison, `eval_command_tracking.py --env 64 --scale 0.4 --turn 0.1`
+(64 robots in the training env with noise, delays and pushes; commands fwd
+0.08, back -0.06, strafe +-0.06 m/s, turn +-0.1 rad/s):
+
+| checkpoint | mean | fwd | back | left | right | turn L | turn R | fell (8 s) |
+|---|---|---|---|---|---|---|---|---|
+| cur4 1.8M | 0.39 | 0.56 | 0.33 | 0.85 | 0.46 | -0.13 | 0.30 | ~31% |
+| cur5 5.4M | 0.55 | 0.65 | 0.54 | 0.74 | 0.33 | 1.32 | -0.27 | ~30% |
+| **cur5 7.2M** | 0.53 | 0.63 | 0.61 | 0.59 | 0.49 | 0.64 | 0.19 | ~32% |
+| cur5 9.0M | 0.50 | 0.63 | 0.57 | 0.84 | 0.35 | 0.38 | 0.21 | ~31% |
+| cur6 5.4M | 0.61 | 0.82 | 0.44 | 0.93 | -0.00 | 1.58 | -0.10 | ~32% |
+| cur6 7.2M | 0.59 | 0.72 | 0.42 | 1.07 | -0.23 | 1.39 | 0.19 | ~32% |
+| cur6 9.0M | 0.54 | 0.68 | 0.47 | 1.13 | -0.29 | 0.86 | 0.43 | ~32% |
+
+cur5 7.2M is the only one with every direction the right way; it also
+stands still on a zero command (env eval: vx -0.002, vy -0.004, wz -0.02).
+
+Open issues, for the user to decide:
+
+- **Speeds are small.** Trained on +-0.1 m/s and +-0.1 rad/s only; the
+  original goal was up to 0.3 m/s forward. Next step would be a stage that
+  widens the ranges from this checkpoint.
+- **~30% fall within 8 s under the training env's pushes** (0.1-1.0 m/s
+  kicks every 5-10 s), even on a stand command. Without pushes (MjInfer)
+  none fall.
+- **Turning is weak and left/right asymmetric**: the reference's turning
+  gait itself only turns ~0.025 rad/s. Regenerating the reference (stronger
+  turning keys) is the user's call.
+- **Command following peaks at ~5-7M steps after each change and then
+  decays** while the training reward keeps rising (cur4, cur5); doubling the
+  tracking weights (cur6) helped some directions and broke strafe right.
+  Mirror (left/right) augmentation is a candidate for the asymmetry.
+- The robot model will gain a shell and a head battery; since observation
+  and action sizes stay the same, this checkpoint can be fine-tuned on the
+  new model rather than retrained from scratch.
 
 ### cur5: command following peaks early, then decays
 
