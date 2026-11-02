@@ -14,6 +14,43 @@ from playground.dcubot.joystick import default_config
 
 USE_MOTOR_SPEED_LIMITS = True
 
+# Left/right mirror of a 13-joint vector (actuator order: left leg 5, right
+# leg 5, neck_pitch, head_pitch, head_yaw). The MJCF's right-leg joint axes
+# are the mirror of the left ones, so mirrored angles keep their sign; only
+# head_yaw flips.
+_MIRROR_PERM = np.array([5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 10, 11, 12])
+_MIRROR_SIGN = np.array([1.0] * 12 + [-1.0])
+
+
+def mirror_joints(x):
+    return x[_MIRROR_PERM] * _MIRROR_SIGN
+
+
+def mirror_obs(obs):
+    """Left/right mirror of MjInfer.get_obs's 94-dim observation."""
+    obs = obs.copy()
+    obs[0:3] *= [-1, 1, -1]  # gyro (angular velocity: pseudovector)
+    obs[3:6] *= [1, -1, 1]  # accelerometer
+    obs[6:12] *= [1, -1, -1, 1, 1, -1]  # vx, vy, yaw rate, neck, head pitch, head yaw
+    for start in range(12, 90, 13):  # angles, velocities, 3 past actions, motor targets
+        obs[start:start + 13] = mirror_joints(obs[start:start + 13])
+    obs[90:92] = obs[90:92][::-1]  # foot contacts
+    obs[92:94] *= -1  # gait phase shifted by half a cycle (the other foot leads)
+    return obs
+
+
+class SymmetricPolicy:
+    """Average the policy with its own mirror image: a = (pi(o) + M pi(M o)) / 2.
+    Exactly left/right symmetric by construction, whatever the trained policy's
+    own left/right bias."""
+
+    def __init__(self, policy):
+        self.policy = policy
+
+    def infer(self, obs):
+        mirrored = mirror_joints(self.policy.infer(mirror_obs(obs)))
+        return 0.5 * (self.policy.infer(obs) + mirrored)
+
 
 class MjInfer(MJInferBase):
     def __init__(self, model_path: str, onnx_model_path: str, standing: bool):
@@ -309,6 +346,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--symmetric", action="store_true",
+        help="average the policy with its left/right mirror image (removes its yaw bias)",
+    )
+    parser.add_argument(
         "--heading_hold", type=float, default=0.0, metavar="K",
         help="hold the heading while no turn command is given: yaw command = "
         "K * heading error (rad/s per rad), clipped to the turn range; 0 = off",
@@ -336,6 +377,8 @@ if __name__ == "__main__":
     mjinfer = MjInfer(args.model_path, onnx_path, args.standing)
     mjinfer.watch_dir = args.watch_dir
     mjinfer.heading_gain = args.heading_hold
+    if args.symmetric:
+        mjinfer.policy = SymmetricPolicy(mjinfer.policy)
     for name, attr in (("lin_vel_x", "COMMANDS_RANGE_X"), ("lin_vel_y", "COMMANDS_RANGE_Y"),
                        ("ang_vel_yaw", "COMMANDS_RANGE_THETA")):
         if getattr(args, name) is not None:

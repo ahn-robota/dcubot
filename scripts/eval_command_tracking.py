@@ -27,7 +27,7 @@ import sys
 import mujoco
 import numpy as np
 
-from playground.dcubot.mujoco_infer import MjInfer, USE_MOTOR_SPEED_LIMITS
+from playground.dcubot.mujoco_infer import MjInfer, SymmetricPolicy, USE_MOTOR_SPEED_LIMITS
 
 XML = "playground/dcubot/xmls/scene_flat_terrain.xml"
 SECONDS = 8.0
@@ -44,8 +44,10 @@ COMMANDS = [
 ]
 
 
-def run(onnx_path, command):
+def run(onnx_path, command, symmetric=False):
     m = MjInfer(XML, onnx_path, False)
+    if symmetric:
+        m.policy = SymmetricPolicy(m.policy)
     m.commands[:3] = list(command)
     model, data = m.model, m.data
     imu = model.site("imu").id
@@ -131,6 +133,10 @@ def main():
         "turn command can be smaller than the robot's own yaw drift)",
     )
     parser.add_argument(
+        "--symmetric", action="store_true",
+        help="evaluate mujoco_infer's SymmetricPolicy (single-run mode only)",
+    )
+    parser.add_argument(
         "--env", type=int, default=0, metavar="N",
         help="average N robots in the training env instead of one MjInfer run",
     )
@@ -148,7 +154,7 @@ def main():
                 status = f"fell {100 * fell_frac:.0f}%"
                 fell = fell_frac >= 0.5
             else:
-                mean, fell_at = run(onnx_path, command)
+                mean, fell_at = run(onnx_path, command, args.symmetric)
                 falls += fell_at is not None
                 status = f"FELL@{fell_at:.1f}s" if fell_at else "ok"
                 fell = fell_at is not None
