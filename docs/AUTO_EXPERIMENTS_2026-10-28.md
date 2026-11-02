@@ -273,7 +273,8 @@ servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
 | nm1b | nm1 7.2M + `randomize.py` torso fix (`TORSO_BODY_ID` 1 -> 2) | 1.8M (stage done) | **fwd 0.82**, back 0.46 (untrained) | ep_len 144 -> 76 at the restore (torso mass/CoM randomization now really applied) -> 89; still drifts sideways (vy -0.09) |
 | nm2 | nm1b 1.8M + backward `--lin_vel_x -0.1 0.1` | 1.8M (stopped) | fwd 0.90 / **back 0.61** | ep_len stuck at ~82: the +-5 cm torso CoM jitter (live since the fix) is near-unsurvivable sideways; reduced to +-1 cm |
 | nm2b | nm2 1.8M + torso CoM jitter +-1 cm | 1.8M (stage done) | **fwd 1.17 / back 0.63** | ep_len 82 -> 183 at the restore (same weights, gentler jitter) -> 217; sideways drift on fwd vy -0.106 -> -0.037; turns while backing up (wz -0.23) |
-| nm3 | nm2b 1.8M + strafe `--lin_vel_y -0.1 0.1` | 12M planned | | running |
+| nm3 | nm2b 1.8M + strafe `--lin_vel_y -0.1 0.1` | 1.8M (stage done) | fwd 1.34 / back 0.42 / **left 0.97 / right 1.07** | strafe learned within one checkpoint and symmetric; ep_len 55 at the restore -> 201 |
+| nm4 | nm3 1.8M + turning `--ang_vel_yaw -0.1 0.1` | 12M planned | | running |
 
 Actuators: the first nm1 start (02:10) used the datasheet torque 1.91 N*m /
 kp 13.37 and was stopped after ~30 min (no checkpoints kept). Upstream Open
