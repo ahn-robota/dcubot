@@ -197,6 +197,13 @@ size.
 
 ## Also fixed (bugs, not upstream-vs-dcubot choices)
 
+`randomize.py` `TORSO_BODY_ID` 1 -> 2 (2026-11-03). Body 1 is "base", the
+massless free-joint frame; the torso mass is on body 2, "base_link". The
+torso mass (+-0.1 kg) / CoM (+-5 cm) randomization therefore never touched
+the torso: it added a +-0.1 kg point mass (negative half the time) at the
+base frame instead. True of every run before this date, the walking cur5
+policy included.
+
 `common/rewards.py`'s `cost_stand_still(ignore_head=True)` branch and
 `cost_head_pos` previously hardcoded numeric slices (`qpos[:5]`/`qpos[9:]`/
 `qpos[5:9]`) matching the duck's 16-joint layout. For dcubot's 13-joint

@@ -16,9 +16,12 @@
 """Domain randomization for DCUBOT.
 
 Copied from playground/common/randomize.py: that file hardcodes
-FLOOR_GEOM_ID=0 and TORSO_BODY_ID=1, which happen to be wrong for DCUBOT's
-compiled model (geom 0 is base_link's own mesh; the actual floor geom is
-index 14). TORSO_BODY_ID=1 ("base") is correct and unchanged.
+FLOOR_GEOM_ID=0 and TORSO_BODY_ID=1, which are wrong for DCUBOT's compiled
+model. Geom 0 is base_link's own mesh; the floor geom is index 14. Body 1 is
+"base", the massless free-joint frame; the torso mass is on body 2,
+"base_link" (0.833 kg on the final-URDF model). With body 1 the torso
+mass/CoM randomization instead added a +-0.1 kg point mass (negative half
+the time) at the base frame -- true of every run before 2026-11-03.
 """
 
 import jax
@@ -26,7 +29,7 @@ from mujoco import mjx
 import jax.numpy as jp
 
 FLOOR_GEOM_ID = 14
-TORSO_BODY_ID = 1
+TORSO_BODY_ID = 2
 
 
 def domain_randomize(model: mjx.Model, rng: jax.Array):
