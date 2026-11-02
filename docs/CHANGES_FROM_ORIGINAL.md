@@ -116,12 +116,18 @@ and found not problematic: 0.25 is well under the half-range even for the
 tightest joint, and the motor-speed-limit clip plus the actuator's
 `inheritrange` clamp bound any remaining excess. Left unchanged.
 
-## 5. feet_air_time/feet_gait/feet_clearance dropped
+## 5. feet_air_time/feet_gait/feet_clearance restored (branch auto/2026-10-28)
 
-These were dcubot-specific additions from an earlier session, not present
-in upstream `open_duck_mini_v2/joystick.py` at all. Dropped for structural
-fidelity to "use upstream structure as-is" -- not because they were found
-harmful. Can be re-added later if gait quality needs it.
+dcubot-specific additions from the pre-restart walking runs, not in
+upstream. The restart dropped them for structural fidelity; afterwards no
+policy ever lifted a foot (both feet down 99% of the time) and none walked.
+Restored with their old weights, all gated on a move command:
+`feet_air_time` 2.0 (`common/rewards.py`), `feet_gait` 6.0 (contact vs an
+alternating stance/swing schedule; offsets (0.75, 0.25) so it agrees with
+the reference's own foot contacts on 95% of gait steps instead of 55%),
+`feet_clearance` -5.0 (swing-foot height error x horizontal foot speed,
+target foot-site height `feet_clearance_target_z=0.07`, a 3 cm swing).
+This is what made the forward stage walk (`docs/AUTO_EXPERIMENTS_2026-10-28.md`, cur1c).
 
 ## 6. Home keyframe pose (xmls/scene_flat_terrain*.xml)
 
@@ -151,10 +157,32 @@ Verified in isolation (no RL env, raw MuJoCo step loop): the new pose holds
 under gravity + position actuators for 2s with the base settling only
 ~1.7mm and the upvector staying at ~0.994 (no fall, no penetration).
 
+## 7. alive 20 -> 5 (branch auto/2026-10-28)
+
+alive paid 20/step against 2.5 for perfect linear tracking, so falling risk
+outweighed walking. 2 was too low: costs exceeded rewards early on and the
+env's per-step clip at 0 removed the learning signal; 5 keeps the sum
+positive.
+
+## 8. Imitation reward: wider joint kernel, upstream's base-velocity terms (branch auto/2026-10-28)
+
+`reward_imitation_dcubot`'s joint term was `exp(-sum(err^2)/0.1)`, ~0.02
+once the legs are 0.2 rad off the reference -- no gradient toward the gait.
+Kernel 0.1 -> 1.0. Added upstream's base-velocity terms (lin xy/z
+`exp(-8 err^2)` x1, ang xy/z `exp(-2 err^2)` x0.5) against the reference's
+base velocity, in the local frame.
+
+## 9. ref_yaw_scale = 10 (branch auto/2026-10-28)
+
+Yaw commands of +-0.05..0.1 rad/s all snapped to the reference grid's
+straight dtheta=0 key (grid 0, +-0.98, +-1.96), so imitation asked for
+straight stepping while tracking asked for turning. The yaw command is
+multiplied by 10 for the reference lookup only, selecting the turning keys.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
-action_rate=-0.5, stand_still=-0.2, alive=20.0, imitation=1.0),
+action_rate=-0.5, stand_still=-0.2, imitation=1.0; alive differs, #7),
 imitation/stand_still gating (`cmd_norm > 0.01` / `< 0.01`), tracking
 always-on, `push_config` (0.1-1.0 m/s magnitude, 5-10s interval),
 `episode_length=1000`, `ctrl_dt=0.02`, noise/delay config,

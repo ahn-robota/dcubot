@@ -31,6 +31,14 @@ class MjInfer(MJInferBase):
 
         self.policy = OnnxInfer(onnx_model_path, awd=True)
         self.watch_dir = None
+        # Heading hold (0 = off): with no turn or strafe command, add a yaw
+        # command gain * (held heading - IMU heading), clipped to the turn
+        # range, so slow yaw drift is corrected. A turn or strafe command moves
+        # the held heading instead (the cur5 policy spins if asked to turn
+        # while strafing).
+        self.heading_gain = 0.0
+        self.heading_target = None
+        self._imu_id = self.model.site("imu").id
         self._loaded_onnx = onnx_model_path
 
         # Arrow keys jump to the ends of the trained command ranges.
@@ -69,6 +77,24 @@ class MjInfer(MJInferBase):
         dt = self.sim_dt * self.decimation
         phase = (self.gait_step * dt / self.gait_period) % 1.0
         return np.array([np.cos(2 * np.pi * phase), np.sin(2 * np.pi * phase)])
+
+    def policy_command(self, data):
+        """The command fed to the policy: self.commands, plus heading hold."""
+        command = list(self.commands)
+        if self.heading_gain <= 0:
+            return command
+        rot = data.site_xmat[self._imu_id].reshape(3, 3)
+        heading = np.arctan2(rot[1, 0], rot[0, 0])
+        if self.heading_target is None or command[1] != 0.0 or command[2] != 0.0:
+            self.heading_target = heading
+            return command
+        error = np.arctan2(
+            np.sin(self.heading_target - heading), np.cos(self.heading_target - heading)
+        )
+        command[2] = float(np.clip(
+            self.heading_gain * error, *self.COMMANDS_RANGE_THETA
+        ))
+        return command
 
     def get_obs(
         self,
@@ -121,7 +147,7 @@ class MjInfer(MJInferBase):
                 lin_vel_y = self.COMMANDS_RANGE_Y[1]
             if keycode == 262:  # arrow right
                 lin_vel_y = self.COMMANDS_RANGE_Y[0]
-            if keycode == 81:  # a
+            if keycode == 81:  # q
                 ang_vel = self.COMMANDS_RANGE_THETA[1]
             if keycode == 69:  # e
                 ang_vel = self.COMMANDS_RANGE_THETA[0]
@@ -191,6 +217,12 @@ class MjInfer(MJInferBase):
                 viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_ACTUATOR] = True
                 self.model.vis.scale.jointlength = 0.05
                 self.model.vis.scale.jointwidth = 0.015
+                print(
+                    "keys: up/down = forward/back, left/right = strafe, q/e = turn "
+                    f"left/right, any other key (e.g. space) = stop | ranges x "
+                    f"{self.COMMANDS_RANGE_X} y {self.COMMANDS_RANGE_Y} yaw "
+                    f"{self.COMMANDS_RANGE_THETA}"
+                )
                 counter = 0
                 last_poll = 0.0
                 while True:
@@ -207,7 +239,7 @@ class MjInfer(MJInferBase):
                     if counter % self.decimation == 0:
                         obs = self.get_obs(
                             self.data,
-                            self.commands,
+                            self.policy_command(self.data),
                         )
                         self.saved_obs.append(obs)
                         action = self.policy.infer(obs)
@@ -276,6 +308,18 @@ if __name__ == "__main__":
         "Arrow keys jump straight to the ends of the trained ranges.",
     )
 
+    parser.add_argument(
+        "--heading_hold", type=float, default=0.0, metavar="K",
+        help="hold the heading while no turn command is given: yaw command = "
+        "K * heading error (rad/s per rad), clipped to the turn range; 0 = off",
+    )
+    for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
+        parser.add_argument(
+            f"--{name}", type=float, nargs=2, default=None, metavar=("MIN", "MAX"),
+            help=f"key command range for {name} (default: joystick.py's); "
+            "match the range the policy was trained on",
+        )
+
     args = parser.parse_args()
 
     onnx_path = args.onnx_model_path
@@ -291,5 +335,10 @@ if __name__ == "__main__":
             time.sleep(10)
     mjinfer = MjInfer(args.model_path, onnx_path, args.standing)
     mjinfer.watch_dir = args.watch_dir
+    mjinfer.heading_gain = args.heading_hold
+    for name, attr in (("lin_vel_x", "COMMANDS_RANGE_X"), ("lin_vel_y", "COMMANDS_RANGE_Y"),
+                       ("ang_vel_yaw", "COMMANDS_RANGE_THETA")):
+        if getattr(args, name) is not None:
+            setattr(mjinfer, attr, list(getattr(args, name)))
     mjinfer.commands[0] = args.vx
     mjinfer.run()
