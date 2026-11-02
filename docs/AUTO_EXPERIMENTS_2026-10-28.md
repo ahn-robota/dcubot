@@ -260,7 +260,7 @@ more weight relative to alive than upstream.
 
 User merged the final-URDF remodel (laptop) and this branch into master and
 asked for the direction curriculum **from scratch** on the new model, running
-14:20 -> 24:00. Same reward config as the chosen cur5 policy, except
+02:10 -> 12:00. Same reward config as the chosen cur5 policy, except
 `feet_clearance_target_z` 0.07 -> 0.03 (the new MJCF's foot sites sit at the
 sole: 0.000 at the home pose). The `feet_gait` offsets (0.75, 0.25) still
 agree with the new reference's contacts on 95% of gait steps. New model:
@@ -269,9 +269,9 @@ servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
 
 | run | stage | steps | result | notes |
 |---|---|---|---|---|
-| nm1 | forward only `--lin_vel_x 0.05 0.1 --lin_vel_y 0 0 --ang_vel_yaw 0 0`, from scratch | | | running (restarted 15:00 with actuator kp/forcerange 17.8/3.35, see below) |
+| nm1 | forward only `--lin_vel_x 0.05 0.1 --lin_vel_y 0 0 --ang_vel_yaw 0 0`, from scratch | | | running (restarted 02:20 with actuator kp/forcerange 17.8/3.35, see below) |
 
-Actuators: the first nm1 start (14:20) used the datasheet torque 1.91 N*m /
+Actuators: the first nm1 start (02:10) used the datasheet torque 1.91 N*m /
 kp 13.37 and was stopped after ~30 min (no checkpoints kept). Upstream Open
 Duck Mini v2 uses the same 7.4 V STS3215 with BAM-identified kp 17.8 /
 forcerange 3.35; switched to those (`docs/CHANGES_FROM_ORIGINAL.md`, final
