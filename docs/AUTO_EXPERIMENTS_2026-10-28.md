@@ -269,4 +269,11 @@ servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
 
 | run | stage | steps | result | notes |
 |---|---|---|---|---|
-| nm1 | forward only `--lin_vel_x 0.05 0.1 --lin_vel_y 0 0 --ang_vel_yaw 0 0`, from scratch | | | running |
+| nm1 | forward only `--lin_vel_x 0.05 0.1 --lin_vel_y 0 0 --ang_vel_yaw 0 0`, from scratch | | | running (restarted 15:00 with actuator kp/forcerange 17.8/3.35, see below) |
+
+Actuators: the first nm1 start (14:20) used the datasheet torque 1.91 N*m /
+kp 13.37 and was stopped after ~30 min (no checkpoints kept). Upstream Open
+Duck Mini v2 uses the same 7.4 V STS3215 with BAM-identified kp 17.8 /
+forcerange 3.35; switched to those (`docs/CHANGES_FROM_ORIGINAL.md`, final
+URDF remodel section). Reference-gait saturation on hip_pitch/knee/ankle:
+21-33% -> 10-16% of the time.

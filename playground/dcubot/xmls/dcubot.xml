@@ -38,7 +38,11 @@
     <default class="sts3215">
       <geom contype="0" conaffinity="0"/>
       <joint damping="0.56" frictionloss="0.068" armature="0.027"/>
-      <position kp="13.37" kv="0.0" forcerange="-1.91 1.91"/>
+      <!-- kp / forcerange: Rhoban BAM identification of the same servo
+           (feetech_sts3215_7_4V), as used by upstream Open Duck Mini v2;
+           the datasheet stall torque (19.5 kg*cm = 1.91 N*m) is lower than
+           what the identified motor model produces. -->
+      <position kp="17.8" kv="0.0" forcerange="-3.35 3.35"/>
     </default>
     <default class="backlash">
       <joint damping="0.01" frictionloss="0" armature="0.01" limited="true"

@@ -239,6 +239,18 @@ cos similarity 1.000 on every joint).
   re-verified against a 7.4V-specific datasheet figure (only a 6V number,
   ~252deg/s, was found), but scales plausibly with voltage so was left
   unchanged.
+- MJCF actuator `kp` / `forcerange` (2026-11-03, lab PC, user-approved):
+  13.37 / 1.91 -> **17.8 / 3.35**, i.e. upstream Open Duck Mini v2's values
+  (`tools/gen_dcubot_mjcf.py`, both MJCFs regenerated). Same servo: upstream
+  takes them from Rhoban BAM's identification of `feetech_sts3215_7_4V`
+  (`docs/sim2real.md` there; BAM's `forcerange = vin * kt / R` with the
+  identified kt 1.18 N*m/A, R 2.48 ohm gives ~3.5 N*m at 7.4 V), and its
+  policies transfer to the real robot with them. The datasheet stall torque
+  (1.91) is below what the identified motor model produces; with it, the
+  reference gait saturated hip_pitch/knee/ankle 21-33% of the time, with
+  BAM's values 10-16%. BAM identifies at the output shaft, so the 1:345
+  gear ratio is already in these numbers. The URDF's `effort=1.91` is left
+  as the datasheet figure.
 - Joint *limits* (ranges) came from the CAD export as-is and are tighter
   than the old model on knee (-90~90 deg -> **-45~30 deg**) and ankle
   (-45~45 deg -> -45~40 deg); neck_pitch widened (-45~45 deg -> -90~45 deg).
