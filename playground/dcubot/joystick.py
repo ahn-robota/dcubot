@@ -221,7 +221,7 @@ def default_config() -> config_dict.ConfigDict:
             magnitude_range=[0.1, 1.0],
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
-        feet_clearance_target_z=0.07,  # m, foot site; 0.040 at the home pose -> 3 cm swing
+        feet_clearance_target_z=0.03,  # m, foot site; 0.000 at the home pose (final-URDF MJCF) -> 3 cm swing
         # Yaw commands (+-0.1 rad/s) sit far below the reference grid's turning
         # keys (+-0.98, +-1.96 labels; the 0.98 key really turns ~0.025 rad/s),
         # so they all snapped to the straight dtheta=0 gait. Scale the yaw

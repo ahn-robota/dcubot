@@ -108,3 +108,6 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   4. 레퍼런스 재생 검증: `scripts/replay_reference.py --pkl playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 돌려서 joint_pos_rew/joint_vel_rew가 1.000 근처인지 확인
   5. 짧은 검증 학습(2~3M 스텝, `--num_evals` 낮춰서) 한 번 돌리고 결과 보고
   6. **사용자가 "시작"이라고 명시적으로 말하기 전까지 본 학습(30M+) 시작하지 말 것**
+- [x] 실습실 PC 확인 (2026-11-03): pull, `uv sync`, smoke test `(94,) 13`, 새 pkl 레퍼런스 재생 210개 키 전부 joint pos/vel 1.000 통과. 새 모델은 레퍼런스 걸음에서 hip_pitch/knee/ankle이 토크 한계(1.91 N·m)에 닿는 시간 21~33% (구모델 4~18%)
+- [x] `auto/2026-10-28` master 병합 (사용자 결정). 새 모델에 맞춰 `feet_clearance_target_z` 0.07 → 0.03 (새 MJCF는 발 사이트가 발바닥, home에서 0.000), `feet_gait` 오프셋은 새 레퍼런스와도 95% 일치해서 그대로
+- [ ] **실습실 PC: 새 모델(2.072 kg)로 방향별 단계 학습 처음부터 (2026-11-03 14:20 ~ 24:00, 사용자 지시)**: 실험명 `nm1`(전진) → `nm2`(+후진) → `nm3`(+좌우) → `nm4`(+회전) → 남은 시간 전체 섞어서. 기록: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final-URDF model"

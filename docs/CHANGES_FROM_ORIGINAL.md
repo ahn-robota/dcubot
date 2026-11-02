@@ -126,7 +126,8 @@ Restored with their old weights, all gated on a move command:
 alternating stance/swing schedule; offsets (0.75, 0.25) so it agrees with
 the reference's own foot contacts on 95% of gait steps instead of 55%),
 `feet_clearance` -5.0 (swing-foot height error x horizontal foot speed,
-target foot-site height `feet_clearance_target_z=0.07`, a 3 cm swing).
+target foot-site height `feet_clearance_target_z`, a 3 cm swing: 0.07 on the
+old model, 0.03 on the final-URDF MJCF whose foot sites sit at the sole).
 This is what made the forward stage walk (`docs/AUTO_EXPERIMENTS_2026-10-28.md`, cur1c).
 
 ## 6. Home keyframe pose (xmls/scene_flat_terrain*.xml)

@@ -255,3 +255,18 @@ learning signal; ep_len at 1.8M was 85.8 vs 95.6 for the baseline. With
 clip. `alive=5` keeps the per-step sum positive (~5.5 reward vs ~3.6 cost at
 the start, costs fall as training proceeds) while still giving tracking 4x
 more weight relative to alive than upstream.
+
+## Final-URDF model (2.072 kg), 2026-11-03
+
+User merged the final-URDF remodel (laptop) and this branch into master and
+asked for the direction curriculum **from scratch** on the new model, running
+14:20 -> 24:00. Same reward config as the chosen cur5 policy, except
+`feet_clearance_target_z` 0.07 -> 0.03 (the new MJCF's foot sites sit at the
+sole: 0.000 at the home pose). The `feet_gait` offsets (0.75, 0.25) still
+agree with the new reference's contacts on 95% of gait steps. New model:
+servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
+21-33% of the time on hip_pitch/knee/ankle (old model 4-18%).
+
+| run | stage | steps | result | notes |
+|---|---|---|---|---|
+| nm1 | forward only `--lin_vel_x 0.05 0.1 --lin_vel_y 0 0 --ang_vel_yaw 0 0`, from scratch | | | running |
