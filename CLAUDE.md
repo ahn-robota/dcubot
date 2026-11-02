@@ -15,7 +15,7 @@
 | 경로 | 역할 |
 |---|---|
 | `playground/dcubot/` | 디쿠봇 환경: `joystick.py`(보상·관측·명령 범위), `runner.py`(학습 진입점), `xmls/`(MJCF) |
-| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional.pkl` 하나만 사용 |
+| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 사용 중 (2026-11-02 최종 URDF 리모델용, 아래 진행 상황 참고). 이전 `polynomial_coefficients_omnidirectional.pkl`은 구모델용, 비교용으로 남겨둠 |
 | `playground/common/` | 원본 Open Duck 공용 코드: 보상, 레퍼런스 모션, 도메인 랜덤화, ONNX 내보내기, 공용 러너 |
 | `scripts/` | 검증·평가 스크립트 (레퍼런스 점검/재생, 방향 데모, 외란 평가) |
 | `docs/` | 원본과 달라진 점, 검증 결과 |
@@ -92,3 +92,19 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 남은 문제: 속도 범위 작음, 밀기(push) 상태에서 8초 내 ~30% 넘어짐, 회전 약하고 좌우 비대칭
   - 평가: `scripts/eval_command_tracking.py` (브랜치 버전에 `--scale`, `--turn`, `--env N` 추가)
 - [ ] 다음: 브랜치 병합 여부 결정, 속도 범위 넓히기, 외피·머리 배터리 반영한 모델로 이 체크포인트에서 이어서 학습
+- [x] **노트북 최종 URDF 리모델 작업 완료 (2026-11-02~03, 브랜치 `model/final-urdf`)**: 외피·머리·배터리팩 실측 반영한 최종 CAD로 URDF/레퍼런스모션/MJCF 전부 재작업
+  - 질량 1.358kg → **2.072kg** (+53%, 몸통+배터리가 가장 큰 증가분, 머리가 2위)
+  - URDF: `robot_description/dcubot.urdf` (구모델과 관절 위치·축 방향 전부 cos=1.000 일치 확인, effort는 실제 서보 스펙(STS3215-C001, 7.4V) 기준 1.91 N·m로 수정 — 이전 3.23은 12V 모델 값이라 틀렸었음)
+  - 레퍼런스 모션: `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl`, 기존과 동일 격자(210개 조합)·설정으로 재생성. `walk_com_height` 0.19→0.22로 수정 필요했음(새 모델 무게중심이 높아져서 0.19면 Placo IK가 깨진 해로 빠짐). **기존 pkl에도 있던 버그 발견**: degree=15 피팅이 JAX 기본 float32 평가에서 사이클 후반부 27% 정도가 터짐 → degree=9로 재피팅해서 해결 (기존 pkl은 안 건드림, 나중에 결정)
+  - MJCF: `playground/dcubot/xmls/dcubot.xml`/`dcubot_train.xml` 재생성(`tools/gen_dcubot_mjcf.py`), 발 사이트 좌우대칭·IMU 위치·home keyframe 전부 새로 계산, 질량/방향/standing안정성/obs·action차원/모방보상 검증 통과
+  - 체크포인트 시각화: `scripts/render_checkpoints.py` 추가 (오프라인, N개 환경 동시 렌더링, 학습엔 영향 없음)
+  - 레퍼런스 생성기(`reference_motion_generator`)는 별도 public 저장소로 분리: [`ahn-robota/dcubot-reference-motion-generator`](https://github.com/ahn-robota/dcubot-reference-motion-generator) (자세한 건 [`docs/GIT_ORGANIZATION.md`](docs/GIT_ORGANIZATION.md))
+  - 자세한 내용·검증 표 전부: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Final URDF remodel"
+  - **구모델(1.358kg) 백업은 아직 삭제 안 함** — 새 레퍼런스 모션이 완전히 안정화(= 본 학습으로 검증)되기 전까지 유지
+- [ ] **다음 (실습실 PC가 할 일, master 병합 후)**:
+  1. `git pull` (이 저장소), 필요하면 `reference_motion_generator`도 clone (보통 불필요 — pkl 이미 커밋돼 있음)
+  2. `uv sync` (새 의존성 `fast-simplification`, `imageio-ffmpeg` 추가됨)
+  3. smoke test: `uv run python -c "from playground.dcubot import joystick; import jax; env = joystick.Joystick(task='flat_terrain_train'); s = env.reset(jax.random.PRNGKey(0)); print(s.obs['state'].shape, env.action_size)"` → `(94,) 13` 나와야 함
+  4. 레퍼런스 재생 검증: `scripts/replay_reference.py --pkl playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 돌려서 joint_pos_rew/joint_vel_rew가 1.000 근처인지 확인
+  5. 짧은 검증 학습(2~3M 스텝, `--num_evals` 낮춰서) 한 번 돌리고 결과 보고
+  6. **사용자가 "시작"이라고 명시적으로 말하기 전까지 본 학습(30M+) 시작하지 말 것**

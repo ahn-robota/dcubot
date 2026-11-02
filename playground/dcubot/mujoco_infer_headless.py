@@ -10,7 +10,14 @@ import mediapy as media
 import mujoco
 import numpy as np
 
-from playground.open_duck_mini_v2.mujoco_infer import MjInfer
+try:
+    import imageio_ffmpeg
+
+    media.set_ffmpeg(imageio_ffmpeg.get_ffmpeg_exe())
+except ImportError:
+    pass  # falls back to a system ffmpeg on PATH, or the PNG-frame fallback below
+
+from playground.dcubot.mujoco_infer import MjInfer
 
 
 def run_headless(
@@ -40,15 +47,8 @@ def run_headless(
         counter += 1
 
         if counter % infer.decimation == 0:
-            if not infer.standing:
-                infer.imitation_i += 1.0 * infer.phase_frequency_factor
-                infer.imitation_i = infer.imitation_i % infer.PRM.nb_steps_in_period
-                infer.imitation_phase = np.array(
-                    [
-                        np.cos(infer.imitation_i / infer.PRM.nb_steps_in_period * 2 * np.pi),
-                        np.sin(infer.imitation_i / infer.PRM.nb_steps_in_period * 2 * np.pi),
-                    ]
-                )
+            # get_obs() itself advances infer.gait_step -- no separate phase
+            # bookkeeping needed here (matches mujoco_infer.py's own loop).
             obs = infer.get_obs(infer.data, infer.commands)
             action = infer.policy.infer(obs)
 
@@ -97,14 +97,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--onnx_model_path", type=str, required=True)
     parser.add_argument(
-        "--reference_data",
-        type=str,
-        default="playground/open_duck_mini_v2/data/polynomial_coefficients.pkl",
-    )
-    parser.add_argument(
         "--model_path",
         type=str,
-        default="playground/open_duck_mini_v2/xmls/scene_flat_terrain.xml",
+        default="playground/dcubot/xmls/scene_flat_terrain.xml",
     )
     parser.add_argument("--standing", action="store_true", default=False)
     parser.add_argument("--duration", type=float, default=6.0)
@@ -112,10 +107,12 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default="replay.mp4")
     args = parser.parse_args()
 
-    infer = MjInfer(args.model_path, args.reference_data, args.onnx_model_path, args.standing)
+    infer = MjInfer(args.model_path, args.onnx_model_path, args.standing)
     run_headless(
         infer,
         duration_s=args.duration,
-        command=[args.vx, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        # [lin_x, lin_y, ang, neck_pitch, head_pitch, head_yaw] -- dcubot has
+        # no head_roll, 6-dim not upstream's 7-dim (see MjInfer.commands).
+        command=[args.vx, 0.0, 0.0, 0.0, 0.0, 0.0],
         output_path=args.output,
     )

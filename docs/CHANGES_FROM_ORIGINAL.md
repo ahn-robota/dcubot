@@ -178,3 +178,126 @@ calls `cost_head_pos`), so this had no effect on past training, but both
 functions now take explicit `leg_indices`/`head_indices` parameters (to be
 derived from joint names by the caller) instead of hardcoded slices, so
 they're correct if ever turned on.
+
+## Final URDF remodel (2026-11-02, branch `model/final-urdf`)
+
+New Fusion 360 CAD remodel with real measured masses (shell + head + battery
+pack), replacing the earlier placeholder-mass model. Total mass 1.358kg ->
+**2.072kg** (+53%). Kinematic joint-to-joint distances unchanged (within
+0.2mm of the old model, confirmed via direct URDF forward-kinematics
+comparison for all 13 joints -- axis directions also confirmed identical,
+cos similarity 1.000 on every joint).
+
+### URDF post-processing (`robot_description/dcubot.urdf`)
+
+- 3 right-leg joint axis signs (`right_hip_yaw`/`right_hip_roll`/
+  `right_hip_pitch`) flipped from the raw Fusion export to match the old
+  model's sign convention (the raw export mirrors axes naively, which
+  doesn't match what the Placo generator / MJCF / joystick.py expect).
+  Joint limits were already symmetric so left unchanged.
+- 3 links had imprecise inertia (Fusion/fusion2urdf truncates to 6 decimal
+  *places*, not significant figures, so very small values lose precision):
+  `hip_yaw_L_1`, `hip_yaw_R_1`, `head_mount_1`. Recomputed from mesh volume
+  via `trimesh` (mass-matched to the URDF's declared mass, CoM kept as
+  given by the URDF; mesh-computed CoM matched the URDF's declared CoM
+  within 1.8-5.5 micrometers for all three, cross-validating the method).
+- All 13 joints: `effort=1.91` N*m, `velocity=5.24` rad/s (STS3215-C001
+  servo spec: 7.4V, 19.5kg*cm stall torque = 1.91 N*m), replacing the
+  exporter's generic placeholder values. `effort` was initially set to 3.23
+  N*m (~32.9kg*cm, matching the 12V/30kg*cm STS3215 variant, not this
+  robot's actual 7.4V/C001 servos) -- corrected after confirming the real
+  part number with the user. `velocity` (5.24 rad/s = 300deg/s) wasn't
+  re-verified against a 7.4V-specific datasheet figure (only a 6V number,
+  ~252deg/s, was found), but scales plausibly with voltage so was left
+  unchanged.
+- Joint *limits* (ranges) came from the CAD export as-is and are tighter
+  than the old model on knee (-90~90 deg -> **-45~30 deg**) and ankle
+  (-45~45 deg -> -45~40 deg); neck_pitch widened (-45~45 deg -> -90~45 deg).
+  Not a deliberate choice -- this is just what the new CAD's joint stops are.
+- Added `trunk`/`left_foot`/`right_foot` dummy fixed-joint frames (required
+  by Placo's `HumanoidRobot`, not part of the normal 14-link/13-joint
+  model). `trunk` offset is now `(0,0,0)` relative to `base_link` (the new
+  model's origin is already at the base_link mesh's own reference point,
+  unlike the old model which needed a 26.9mm Y correction). Foot-frame
+  (ankle-joint-origin -> sole-center) recomputed from the new foot mesh via
+  `trimesh`: `(14.58, 18.27, -38.82)` mm vs old `(12.2, 18.5, -38.8)` mm --
+  only x moved meaningfully (+2.4mm).
+
+### Reference motion regeneration (`playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl`)
+
+- **`walk_com_height` 0.19 -> 0.22** (`placo_defaults.json` and
+  `placo_presets/medium.json` in the generator). The new model's heavier
+  base_link+head raises its natural (straight-leg) whole-body CoM height
+  from 186mm to ~213-234mm above the foot sole (measured two ways: Placo's
+  own `com_world()`, and a mass-weighted sum over all 14 links' MuJoCo-
+  compiled CoMs). At the old target (0.19, barely below the old model's own
+  186mm), the new model's standing IK solve falls into a degenerate,
+  asymmetric branch (one leg pinned exactly at its joint limit, left/right
+  knee signs opposite). Swept 0.19->0.25 in 0.005 steps: solver is broken
+  through 0.21, clean (small, symmetric, old-model-like angles) from 0.215
+  on. Picked 0.22 for margin above that boundary. Real achieved
+  velocities for the same raw sweep dx/dy/dtheta are unchanged from the old
+  model (checked against the 3 extreme single-axis combos: forward 0.3003
+  -> 0.3002 m/s, strafe -0.1569 -> -0.1568 m/s, turn 0.1032 -> 0.1040
+  rad/s) -- com_height does not affect the step-length/cadence -> velocity
+  mapping, only crouch depth.
+- Regenerated the 210-combo omnidirectional sweep using the UNCHANGED
+  `robots/dcubot/auto_gait.json` (byte-identical to the one that produced
+  the currently-used pkl -- it was initially suspected stale because its
+  raw sweep bounds, e.g. `max_sweep_x: 0.06`, don't match the pkl's own key
+  labels, e.g. `dx` up to `0.294`; this is NOT a mismatch, the key labels
+  are `raw_value * 2 / period` -- `gait_generator.py`'s "computed xvel"
+  formula -- confirmed by reproducing the exact label set from the raw
+  sweep bounds). Grid confirmed identical to the existing pkl via
+  `scripts/inspect_reference.py`: 210 keys, same dx/dy/dtheta value sets,
+  period 0.408s, fps 50.
+- **Found and fixed a real bug affecting the EXISTING pkl too**: fitting
+  used `degree=15` (float64, per the existing convention), but the actual
+  consumer (`playground/common/poly_reference_motion.py`, used inside the
+  JAX-jitted training loop) evaluates the polynomial via
+  `jax.numpy.polyval`, which silently runs in **float32** (`jax_enable_x64`
+  is off by default). A degree-15 fit over only 20 samples is already
+  ill-conditioned (coefficients up to ~1e8, confirmed by direct
+  inspection); float32 evaluation of that ill-conditioned polynomial
+  explodes for roughly the last third of each gait cycle (phase-steps
+  ~13-19 of 20). Quantified on the existing (currently-trained-on) pkl:
+  **27.4% of (combo, phase-step) pairs show joint angles whose magnitude
+  exceeds 3x the physical joint limit** (some by hundreds of degrees;
+  foot_contact channel also affected the same way). The new pkl at
+  degree=15 showed the same rate (29.4%) -- confirms this is not new-model-
+  specific, it's inherited from the shared fitting/evaluation code. Swept
+  fit degree 7-15 and measured the float32-vs-float64 evaluation gap
+  directly: negligible through degree 9 (0.04 deg), degree 10 already
+  0.63 deg, degree 12+ catastrophic (tens to thousands of degrees) --
+  matches the `fit_poly.py` comment "float32 breaks deg>=10 fits", which
+  was apparently only ever applied to the *fitting* step, not evaluation.
+  **Fixed by refitting the new pkl at `degree=9`** (`FIT_DEGREE=9` env var)
+  -- re-verified 0% bad pairs across all 210 combos x 20 phase-steps, and
+  foot_contact / left-right hip_pitch phase symmetry both look like a
+  normal gait. Did not touch global `jax_enable_x64` (would affect the
+  entire JAX/Brax/MJX training pipeline's performance/memory, a much
+  bigger decision) or the existing pkl (already used for real training
+  runs; whether to regenerate it at degree=9 too is left for the user to
+  decide separately).
+- Reproduction commands:
+  ```bash
+  cd reference_motion_generator
+  uv run python scripts/auto_waddle.py --duck dcubot --sweep -j 6 \
+    --output_dir recordings_omnidirectional_newurdf
+  FIT_DEGREE=9 uv run python scripts/fit_poly.py \
+    --ref_motion recordings_omnidirectional_newurdf
+  ```
+  (`-j 6`, not higher -- `-j 16` caused an OOM kill on this laptop's 15GB
+  RAM, silently losing ~85% of the sweep with no error, only a truncated
+  per-combo log.)
+
+### Also found: two more dead CLI arguments (bugs, not used -- discovered while testing)
+
+`open_duck_reference_motion_generator/gait_generator.py`'s `--walk_com_height`
+and `--dx`/`--dy`/`--dtheta` flags are parsed but never applied to the
+actual Placo parameters -- only the `--preset` JSON file's own values are
+used. `auto_waddle.py`'s sweep mode already works around this correctly (it
+edits the preset dict directly in Python before writing the temp preset
+file), so the 210-combo sweep itself was never affected -- this only
+matters for anyone invoking `gait_generator.py` directly with these flags
+expecting them to override the preset (they silently don't).

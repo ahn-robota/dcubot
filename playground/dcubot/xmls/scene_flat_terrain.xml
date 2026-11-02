@@ -4,7 +4,7 @@
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
         <rgba haze="0.15 0.25 0.35 1"/>
-        <global azimuth="160" elevation="-20"/>
+        <global azimuth="160" elevation="-20" offwidth="1920" offheight="1440"/>
     </visual>
 
     <asset>
@@ -21,25 +21,26 @@
         </body>
     </worldbody>
 
-    <!-- Standing pose matches the Placo reference motion's own standing recording
-         (motions_dcubot/standing_0.0_0.0_0.0.json, steady-state average over the
-         last 100 frames, L/R-symmetrized; com_height=0.19, trunk_pitch=5.5deg per
-         that recording's Placo config). Root quat reordered from scipy's
-         [x,y,z,w] (gait_generator.py's R.from_matrix(...).as_quat() convention)
-         to MuJoCo's [w,x,y,z]. Joint order: left leg(5), right leg(5), head(3),
-         matching this file's body declaration order. -->
+    <!-- Standing pose for the final-URDF remodel (2.072kg, com_height=0.22):
+         phase-averaged over the new reference's own zero-command
+         (dx=dy=dtheta=0) combo, L/R-symmetrized (hip_yaw/hip_roll zeroed as
+         noise, hip_pitch/knee/ankle averaged across both legs), base height
+         solved so the feet land exactly on the floor. trunk_pitch=5.5deg
+         unchanged from before. Root quat in MuJoCo's [w,x,y,z]. Joint order:
+         left leg(5), right leg(5), head(3), matching this file's body
+         declaration order. See docs/CHANGES_FROM_ORIGINAL.md. -->
     <keyframe>
         <key name="home"
             qpos="
-    0 0 0.2495
-    0.99885 0 0.04796 0
-      0 0 0.0769 0.0365 -0.0173
-      0 0 0.0769 0.0365 -0.0173
+    0 0 0.264053
+    0.99885 0 0.04798 0
+      0 0 0.024435 0.059952 0.011606
+      0 0 0.024435 0.059952 0.011606
       0 0 0
 "
             ctrl="
-      0 0 0.0769 0.0365 -0.0173
-      0 0 0.0769 0.0365 -0.0173
+      0 0 0.024435 0.059952 0.011606
+      0 0 0.024435 0.059952 0.011606
       0 0 0
       "/>
     </keyframe>
