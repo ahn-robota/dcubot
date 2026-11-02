@@ -274,7 +274,15 @@ servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
 | nm2 | nm1b 1.8M + backward `--lin_vel_x -0.1 0.1` | 1.8M (stopped) | fwd 0.90 / **back 0.61** | ep_len stuck at ~82: the +-5 cm torso CoM jitter (live since the fix) is near-unsurvivable sideways; reduced to +-1 cm |
 | nm2b | nm2 1.8M + torso CoM jitter +-1 cm | 1.8M (stage done) | **fwd 1.17 / back 0.63** | ep_len 82 -> 183 at the restore (same weights, gentler jitter) -> 217; sideways drift on fwd vy -0.106 -> -0.037; turns while backing up (wz -0.23) |
 | nm3 | nm2b 1.8M + strafe `--lin_vel_y -0.1 0.1` | 1.8M (stage done) | fwd 1.34 / back 0.42 / **left 0.97 / right 1.07** | strafe learned within one checkpoint and symmetric; ep_len 55 at the restore -> 201 |
-| nm4 | nm3 1.8M + turning `--ang_vel_yaw -0.1 0.1` | 12M planned | | running |
+| nm4 | nm3 1.8M + turning `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | best balanced **9.0M: 0.79** -- fwd 0.88 / back 0.98 / left 0.75 / right 1.15 / turn L 0.71 / turn R 0.25, no falls | no falls from 1.8M on; ep_len 53 -> 165 / 227 / 318 / 373 / 427 / 493; 7.2M 0.75 (all positive), 10.8M 0.89 / 12.6M 0.90 but turn L or strafe L drops; turning bias flips between checkpoints (right at 3.6-5.4M) |
+| nm5 | nm4 9.0M + wider speeds `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` | 14.4M planned (until ~11:05) | | running; eval at fwd 0.15 / back -0.11 / strafe +-0.11 / turn +-0.15 |
+
+Symmetric inference (`mujoco_infer.py --symmetric`, a = (pi(o) + M pi(M o))/2,
+inference only): on nm4 5.4M the yaw rate on forward went -0.51 -> +0.00,
+standing -0.28 -> +0.01, backward -0.20 -> -0.01, and turn left/right both
+went the right way (+0.04/-0.03, raw -0.02/-0.14); strafe right weakened.
+The robot model is symmetric (whole-body CoM y +0.4 mm), so the per-run
+turning bias is the policy's.
 
 Actuators: the first nm1 start (02:10) used the datasheet torque 1.91 N*m /
 kp 13.37 and was stopped after ~30 min (no checkpoints kept). Upstream Open
