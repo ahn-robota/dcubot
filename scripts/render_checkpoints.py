@@ -24,6 +24,8 @@ Usage:
     MUJOCO_GL=osmesa uv run python scripts/render_checkpoints.py \
         checkpoints/<run>/<step>.onnx --num_envs 4 --duration 5 \
         --out checkpoints/<run>/<step>_rollout.mp4
+    (add --lin_vel_x/--lin_vel_y/--ang_vel_yaw MIN MAX to sample commands from
+    the range the policy was trained on)
 """
 
 import argparse
@@ -56,16 +58,15 @@ def _label_for(onnx_path: str) -> str:
     return f"step {step}"
 
 
-def _sample_command(rng: np.random.Generator) -> list:
-    config = default_config()
-    vx = rng.uniform(*config.lin_vel_x)
-    vy = rng.uniform(*config.lin_vel_y)
-    vyaw = rng.uniform(*config.ang_vel_yaw)
+def _sample_command(rng: np.random.Generator, ranges: dict) -> list:
+    vx = rng.uniform(*ranges["lin_vel_x"])
+    vy = rng.uniform(*ranges["lin_vel_y"])
+    vyaw = rng.uniform(*ranges["ang_vel_yaw"])
     # [lin_x, lin_y, ang, neck_pitch, head_pitch, head_yaw] -- head held neutral.
     return [vx, vy, vyaw, 0.0, 0.0, 0.0]
 
 
-def make_envs(model_path: str, onnx_path: str, num_envs: int, seed: int):
+def make_envs(model_path: str, onnx_path: str, num_envs: int, seed: int, ranges: dict):
     rng = np.random.default_rng(seed)
     envs = []
     grid_cols = int(np.ceil(np.sqrt(num_envs)))
@@ -76,7 +77,7 @@ def make_envs(model_path: str, onnx_path: str, num_envs: int, seed: int):
         infer.data.qpos[0] += col * GRID_SPACING
         infer.data.qpos[1] += row * GRID_SPACING
         mujoco.mj_forward(infer.model, infer.data)
-        infer.commands = _sample_command(rng)
+        infer.commands = _sample_command(rng, ranges)
         envs.append(infer)
     return envs
 
@@ -140,9 +141,20 @@ def main():
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=str, default="checkpoint_rollout.mp4")
+    for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
+        parser.add_argument(
+            f"--{name}", type=float, nargs=2, default=None, metavar=("MIN", "MAX"),
+            help=f"command range to sample {name} from (default: joystick.py's); "
+            "match the range the policy was trained on",
+        )
     args = parser.parse_args()
 
-    envs = make_envs(args.model_path, args.onnx_model_path, args.num_envs, args.seed)
+    config = default_config()
+    ranges = {
+        name: getattr(args, name) or list(getattr(config, name))
+        for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw")
+    }
+    envs = make_envs(args.model_path, args.onnx_model_path, args.num_envs, args.seed, ranges)
     label = _label_for(args.onnx_model_path)
 
     renderer = mujoco.Renderer(envs[0].model, height=args.height, width=args.width)
