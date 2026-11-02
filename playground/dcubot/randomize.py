@@ -64,9 +64,11 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
         )
         dof_armature = model.dof_armature.at[dof_addr].set(armature)
 
-        # Jitter center of mass positiion: +U(-0.05, 0.05).
+        # Jitter torso center of mass position: +U(-0.01, 0.01) (upstream
+        # +-0.05). The torso is 0.833 of 2.07 kg on dcubot's narrow stance: a
+        # 2 cm sideways shift already tips a trained standing policy over.
         rng, key = jax.random.split(rng)
-        dpos = jax.random.uniform(key, (3,), minval=-0.05, maxval=0.05)
+        dpos = jax.random.uniform(key, (3,), minval=-0.01, maxval=0.01)
         body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
             model.body_ipos[TORSO_BODY_ID] + dpos
         )

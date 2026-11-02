@@ -203,6 +203,12 @@ torso mass (+-0.1 kg) / CoM (+-5 cm) randomization therefore never touched
 the torso: it added a +-0.1 kg point mass (negative half the time) at the
 base frame instead. True of every run before this date, the walking cur5
 policy included.
+With the torso really randomized, upstream's +-5 cm CoM jitter turned out
+too large for dcubot: torso 0.833 of 2.07 kg and a narrow stance, and a
+standing policy tips over within 1-2.6 s once the torso CoM is shifted
+>=2 cm sideways (4/6 shift directions at 2 cm, 5/6 at 5 cm); training
+episodes stalled at ~80 steps. Jitter reduced to **+-1 cm** (2/6 at 1 cm
+for a policy never trained against it).
 
 `common/rewards.py`'s `cost_stand_still(ignore_head=True)` branch and
 `cost_head_pos` previously hardcoded numeric slices (`qpos[:5]`/`qpos[9:]`/
