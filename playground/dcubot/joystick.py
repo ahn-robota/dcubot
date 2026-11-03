@@ -227,6 +227,7 @@ def default_config() -> config_dict.ConfigDict:
         # so they all snapped to the straight dtheta=0 gait. Scale the yaw
         # command for the reference lookup only (auto cur5).
         ref_yaw_scale=10.0,
+        single_axis_command_prob=0.3,  # see sample_command
         # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
         # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
         # widened past the achieved scale (0.103) toward upstream's
@@ -738,7 +739,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         return ret
 
     def sample_command(self, rng: jax.Array) -> jax.Array:
-        rng1, rng2, rng3, rng4, rng5, rng6, rng7 = jax.random.split(rng, 7)
+        rng1, rng2, rng3, rng4, rng5, rng6, rng7, rng8, rng9 = jax.random.split(rng, 9)
 
         lin_vel_x = jax.random.uniform(
             rng1, minval=self._config.lin_vel_x[0], maxval=self._config.lin_vel_x[1]
@@ -769,6 +770,17 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         )
 
         # With 10% chance, set everything to zero (upstream's stand-still command).
+        # Single-axis commands (not in upstream): with probability
+        # single_axis_command_prob keep only one of (x, y, yaw), chosen
+        # uniformly. Mixed 3-axis commands almost never ask for a pure turn in
+        # place or a pure strafe, which is what the robot is driven with.
+        keep = jax.nn.one_hot(jax.random.randint(rng8, (), 0, 3), 3)
+        single = jax.random.bernoulli(rng9, p=self._config.single_axis_command_prob)
+        mask = jp.where(single, keep, jp.ones(3))
+        lin_vel_x, lin_vel_y, ang_vel_yaw = (
+            lin_vel_x * mask[0], lin_vel_y * mask[1], ang_vel_yaw * mask[2]
+        )
+
         return jp.where(
             jax.random.bernoulli(rng4, p=0.1),
             jp.zeros(6),

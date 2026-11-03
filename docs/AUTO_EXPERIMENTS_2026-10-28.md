@@ -341,4 +341,10 @@ its eval line and a 30 s / 20-robot video (nothing deleted this time).
 
 | run | ranges | steps | result | notes |
 |---|---|---|---|---|
-| long1 | `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` (same as nm5), from nm5 3.6M | 25.2M planned | | running |
+| long1 | `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` (same as nm5), from nm5 3.6M | 19.8M (stopped) | env eval (64 robots, scale 0.75 / turn 0.15): best 14.4M sym `|r-1|` 0.37 / raw 0.33, vs nm5 3.6M sym **0.28** | translation stronger (fwd/back ~1.0-1.25) but turning lost in symmetric mode (0.13/0.15; raw turns right only); falls unchanged ~32%; single-run `|r-1|` peaked at 14.4M (0.37) then 0.40 / 0.48 / 0.55 |
+| long2 | same ranges, from **nm5 3.6M**, + 30% single-axis commands (CHANGES #10) | 25.2M planned | | running |
+
+The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
++-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the
+policy's own symmetry breaking. Training commands mix all three axes, while
+the eval (and the robot) use pure ones -- long2 adds single-axis commands.

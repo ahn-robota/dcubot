@@ -180,6 +180,17 @@ straight dtheta=0 key (grid 0, +-0.98, +-1.96), so imitation asked for
 straight stepping while tracking asked for turning. The yaw command is
 multiplied by 10 for the reference lookup only, selecting the turning keys.
 
+## 10. Single-axis commands, 30% (2026-11-04, lab PC)
+
+Upstream samples x, y and yaw independently, so almost every command mixes
+all three; a pure turn in place or a pure strafe is practically never
+trained, yet that is how the robot is driven and evaluated. After 20M more
+steps (long1) pure-command following had drifted (forward overshoot up to
+1.6x, left turns never learned) while the training reward kept rising.
+`sample_command` now keeps only one axis, chosen uniformly, for
+`single_axis_command_prob = 0.3` of the commands (after the 10% zero
+commands: ~10% stand / ~27% single-axis / ~63% mixed).
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
