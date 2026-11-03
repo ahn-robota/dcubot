@@ -345,6 +345,42 @@ cos similarity 1.000 on every joint).
   RAM, silently losing ~85% of the sweep with no error, only a truncated
   per-combo log.)
 
+### Head v2 (2026-11-04, branch `model/head-v2`)
+
+After real assembly, the head shape was revised: `head_1` 221.0 -> 224.0g
+(mass 2.072 -> 2.075kg), height 91mm -> 56mm (-38.5%), volume -14.3%
+despite the mass increase. Only `head_1`'s mesh/mass/inertia/CoM changed
+(confirmed via diff at every stage: raw export, URDF, MJCF); nothing else
+in the robot moved. Whole-body CoM (base_link-relative) shifted X -3.34mm,
+Y ~0mm, Z -1.13mm (3.52mm total, under the 5mm threshold originally set
+for redoing the reference motion).
+
+Initially kept the existing `..._newurdf_deg9.pkl` (head-v1) as-is per
+that threshold. Regenerated anyway after all, at the user's request, to
+visually re-check turning directly against the actual head-v2 model in
+Placo (`gait_playground`) rather than the old one -- same pipeline as the
+final-URDF remodel (same `auto_gait.json`/grid, `degree=9` fit), confirmed
+grid-identical and 0% bad pairs.
+`playground/dcubot/data/polynomial_coefficients_omnidirectional_headv2_deg9.pkl`,
+`joystick.py` now points here; `..._newurdf_deg9.pkl` (head-v1) stays in
+place, untouched.
+
+Also fixed and then reverted: `scripts/replay_directions_mujoco.py`'s
+`--source pkl` mode integrates Placo's own base_linear_vel/base_angular_vel
+(not used by training -- known unreliable, see the "Final URDF remodel"
+imitation-reward note) to draw the base's visual trajectory, which made
+turn segments visibly swerve instead of rotating in place. Tried
+averaging over one gait cycle and re-rotating by accumulated yaw (fixed
+the swerve in a numeric check -- turn_left's drift dropped from
+oscillating up to 16cm/step to 3.2cm total over 3s) but the user reported
+it looked worse in the actual viewer, so this was reverted; the script's
+visualization of turning is still not fully correct. Not a problem with
+the reference data itself (`replay_reference.py`'s joint pos/vel components
+are 1.000, and the actual training reward never reads these fields).
+
+Actuator `kp=17.8`/`forcerange=3.35` (BAM-identified, see "Final URDF
+remodel") and all site positions unchanged.
+
 ### Also found: two more dead CLI arguments (bugs, not used -- discovered while testing)
 
 `open_duck_reference_motion_generator/gait_generator.py`'s `--walk_com_height`

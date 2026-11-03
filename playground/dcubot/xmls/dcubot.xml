@@ -138,7 +138,7 @@
             <joint name="head_pitch" type="hinge" axis="-0.0 -1.0 -0.0" range="-1.570796 1.570796" class="sts3215"/>
             <geom class="sts3215" pos="-0.02 0.0179 -0.09111" type="mesh" rgba="0.7 0.7 0.7 1" mesh="head_mount_1"/>
             <body name="head_1" pos="0.0 0.01785 0.057">
-              <inertial pos="0.002402246044550929 3.706435195942659e-07 0.0020560218479165615" mass="0.22100513" fullinertia="0.000436 0.000394 0.000373 0 -0 8e-06"/>
+              <inertial pos="0.0021036555599289568 3.4519648864176717e-05 -0.0102989610168355" mass="0.22401113" fullinertia="0.000279 0.000256 0.000373 0 -0 0"/>
               <joint name="head_yaw" type="hinge" axis="-0.0 0.0 -1.0" range="-1.570796 1.570796" class="sts3215"/>
               <geom class="sts3215" pos="-0.02 5e-05 -0.14811" type="mesh" rgba="0.7 0.7 0.7 1" mesh="head_1"/>
             </body>
