@@ -110,4 +110,8 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   6. **사용자가 "시작"이라고 명시적으로 말하기 전까지 본 학습(30M+) 시작하지 말 것**
 - [x] 실습실 PC 확인 (2026-11-03): pull, `uv sync`, smoke test `(94,) 13`, 새 pkl 레퍼런스 재생 210개 키 전부 joint pos/vel 1.000 통과. 새 모델은 레퍼런스 걸음에서 hip_pitch/knee/ankle이 토크 한계(1.91 N·m)에 닿는 시간 21~33% (구모델 4~18%)
 - [x] `auto/2026-10-28` master 병합 (사용자 결정). 새 모델에 맞춰 `feet_clearance_target_z` 0.07 → 0.03 (새 MJCF는 발 사이트가 발바닥, home에서 0.000), `feet_gait` 오프셋은 새 레퍼런스와도 95% 일치해서 그대로
-- [ ] **실습실 PC: 새 모델(2.072 kg)로 방향별 단계 학습 처음부터 (2026-11-03 02:10 ~ 12:00, 사용자 지시)**: 실험명 `nm1`(전진) → `nm2`(+후진) → `nm3`(+좌우) → `nm4`(+회전) → 남은 시간 전체 섞어서. 기록: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final-URDF model"
+- [x] **실습실 PC: 새 모델(2.072 kg)로 방향별 단계 학습 처음부터 (2026-11-03 02:10 ~ 11:20, 사용자 지시) 완료**: 실험명 `nm1`(전진) → `nm2`(+후진) → `nm3`(+좌우) → `nm4`(+회전) → 남은 시간 전체 섞어서. 기록: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final-URDF model"
+  - 선택된 정책: `nm5` 3.6M + **좌우 대칭 추론**(`mujoco_infer.py --symmetric`), 실습실 PC `checkpoints/nm5/2026_11_03_090557_3604480.onnx`. 학습 범위 x -0.15~0.2, y ±0.12, yaw ±0.15. 64대 학습환경 평가(밀기 포함)에서 전진·후진·좌우·좌우회전 모두 명령의 0.59~0.84배, 8초 내 넘어짐 ~31%
+  - 함께 고친 것: 서보 kp/forcerange → 원본 BAM 실측값(17.8/3.35), `randomize.py` 몸통 ID 버그(1→2), 몸통 무게중심 흔들기 ±5→±1 cm. 전부 `docs/CHANGES_FROM_ORIGINAL.md`
+  - 자세한 결과표: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final result, final-URDF model"
+- [ ] 다음: 밀기 상태 넘어짐(~30%) 줄이기, 속도 범위 더 넓히기(목표 0.3 m/s), 실제 로봇 배포 준비

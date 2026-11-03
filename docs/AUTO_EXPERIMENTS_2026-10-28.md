@@ -275,7 +275,44 @@ servo force range 1.91 N·m (was 3.23); open-loop reference playback hits it
 | nm2b | nm2 1.8M + torso CoM jitter +-1 cm | 1.8M (stage done) | **fwd 1.17 / back 0.63** | ep_len 82 -> 183 at the restore (same weights, gentler jitter) -> 217; sideways drift on fwd vy -0.106 -> -0.037; turns while backing up (wz -0.23) |
 | nm3 | nm2b 1.8M + strafe `--lin_vel_y -0.1 0.1` | 1.8M (stage done) | fwd 1.34 / back 0.42 / **left 0.97 / right 1.07** | strafe learned within one checkpoint and symmetric; ep_len 55 at the restore -> 201 |
 | nm4 | nm3 1.8M + turning `--ang_vel_yaw -0.1 0.1` | 12.6M (done) | best balanced **9.0M: 0.79** -- fwd 0.88 / back 0.98 / left 0.75 / right 1.15 / turn L 0.71 / turn R 0.25, no falls | no falls from 1.8M on; ep_len 53 -> 165 / 227 / 318 / 373 / 427 / 493; 7.2M 0.75 (all positive), 10.8M 0.89 / 12.6M 0.90 but turn L or strafe L drops; turning bias flips between checkpoints (right at 3.6-5.4M) |
-| nm5 | nm4 9.0M + wider speeds `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` | 14.4M planned (until ~11:05) | | running; eval at fwd 0.15 / back -0.11 / strafe +-0.11 / turn +-0.15 |
+| nm5 | nm4 9.0M + wider speeds `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` | 12.6M (done 10:56) | see final comparison | ep_len 324 -> 489; no falls in any single-run eval; raw turning stays one-sided |
+
+### Final result, final-URDF model (2026-11-03 11:20)
+
+**Chosen: nm5 3.6M with symmetric inference** --
+`checkpoints/nm5/2026_11_03_090557_3604480.onnx` (lab PC, not in git),
+run with `mujoco_infer.py --symmetric`. Config: master as committed
+(BAM actuators, torso CoM jitter +-1 cm, reward/curriculum as cur5) with
+`--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15`.
+Lineage: nm1 -> nm1b -> nm2 -> nm2b -> nm3 -> nm4 (9.0M) -> nm5.
+
+`eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15` (64 robots in
+the training env, noise/delays/pushes, nominal model; commands fwd 0.15,
+back -0.11, strafe +-0.11 m/s, turn +-0.15 rad/s). `|r-1|` = mean
+distance of the six ratios from 1 (overshoot counts):
+
+| checkpoint | mode | `|r-1|` | fwd | back | left | right | turn L | turn R | fell (8 s) |
+|---|---|---|---|---|---|---|---|---|---|
+| nm4 7.2M | sym | 0.39 | 0.56 | 0.46 | 0.58 | 0.46 | 0.73 | 0.85 | 31% |
+| nm4 9.0M | sym | 0.32 | 0.62 | 0.55 | 0.77 | 0.62 | 0.72 | 0.81 | 29% |
+| **nm5 3.6M** | **sym** | **0.28** | 0.74 | 0.63 | 0.84 | 0.74 | 0.59 | 0.77 | 31% |
+| nm5 5.4M | sym | 0.28 | 0.82 | 0.66 | 0.94 | 0.86 | 0.48 | 0.56 | 32% |
+| nm5 7.2M | sym | 0.40 | 0.95 | 0.72 | 0.97 | 0.94 | -0.05 | 0.07 | 31% |
+| nm5 12.6M | sym | 0.32 | 1.18 | 0.82 | 0.91 | 0.85 | 0.26 | 0.39 | 32% |
+| nm4 7.2M | raw | 0.60 | 0.47 | 0.50 | 0.61 | 0.44 | -0.35 | 0.75 | 33% |
+| nm4 9.0M | raw | 0.66 | 0.50 | 0.56 | 0.62 | 0.61 | -0.17 | -0.11 | 32% |
+| nm5 3.6M | raw | 0.49 | 0.65 | 0.62 | 0.79 | 0.72 | 0.40 | -0.12 | 32% |
+| nm5 5.4M | raw | 0.33 | 0.76 | 0.65 | 0.76 | 0.80 | 0.49 | 0.56 | 34% |
+| nm5 7.2M | raw | 0.43 | 0.82 | 0.75 | 0.80 | 0.73 | 0.50 | -0.19 | 35% |
+| nm5 12.6M | raw | 0.26 | 1.00 | 0.81 | 0.87 | 0.64 | 0.19 | 1.07 | 33% |
+
+nm5 3.6M symmetric is the most even (every direction >= 0.59, both turns);
+nm5 5.4M symmetric ties on `|r-1|` but turns weaker; raw nm5 12.6M scores
+0.26 but turns left only 0.19. Without pushes (single-run eval) none fall.
+
+Open issues: ~30% of robots fall within 8 s under the training env's pushes
+(same as the old model); speeds are still small (0.15 m/s fwd) next to the
+original 0.3 m/s goal; slight forward creep (~0.03 m/s) on a stand command.
 
 Symmetric inference (`mujoco_infer.py --symmetric`, a = (pi(o) + M pi(M o))/2,
 inference only): on nm4 5.4M the yaw rate on forward went -0.51 -> +0.00,
