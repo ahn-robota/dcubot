@@ -86,4 +86,16 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 64대 학습환경 평가(밀기 포함): 여섯 방향 모두 명령의 0.59~0.84배, 8초 내 넘어짐 ~31%. 밀기 없으면 넘어지지 않음
   - 함께 고친 것: 서보 kp/forcerange를 원본 BAM 실측값(17.8/3.35)으로, `randomize.py` 몸통 ID 버그, 몸통 무게중심 흔들기 ±5→±1 cm
   - 재현 절차: [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md)
-- [ ] 다음 후보 (사용자가 정함): 밀기 상태 넘어짐(~30%) 줄이기, 속도 범위 넓히기(목표 전진 0.3 m/s), 실제 로봇 런타임에 대칭 추론·방향 유지 넣기
+- [x] **머리 형상 수정 반영 (노트북, 2026-11-04, 브랜치 `model/head-v2`)**: 실물 조립 후 머리 형상 소폭 변경, 질량 2.072→2.075 kg
+  - head_1만 변경 확인(질량 221.0→224.0g, 높이 91→56mm, 부피 −14.3%), 나머지 링크·조인트는 전부 동일 (cos=1.000 교차검증)
+  - 전체 CoM 이동 3.52mm (X −3.34, Y ~0, Z −1.13) — 5mm 미만이라 **레퍼런스 모션은 재생성 안 함**, 기존 `..._newurdf_deg9.pkl` 그대로 사용
+  - kp=17.8/forcerange=3.35, IMU·발 site, home 높이 전부 변화 없음 확인
+  - 자세한 내용: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Head v2"
+- [ ] **다음 (실습실 PC가 할 일)**:
+  1. `git pull`, `uv sync`, 스모크 테스트 (obs `(94,)`, action `13`)
+  2. 기존 최종 정책(`nm5` 3.6M, `checkpoints/nm5/2026_11_03_090557_3604480.onnx`)을 **새 머리 모델**로 평가해서 머리 질량 변화로 못 걷게 됐는지 확인:
+     ```bash
+     uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 checkpoints/nm5/2026_11_03_090557_3604480.onnx
+     uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 --symmetric checkpoints/nm5/2026_11_03_090557_3604480.onnx
+     ```
+  3. 평가 결과 보고, **사용자가 "시작"이라고 하면** `nm5` 체크포인트에서 이어서 학습 — [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md) 5단계(전체 방향, 넓은 속도범위) 명령 범위로, 체크포인트마다 64대 평가로 최선 선택

@@ -345,6 +345,18 @@ cos similarity 1.000 on every joint).
   RAM, silently losing ~85% of the sweep with no error, only a truncated
   per-combo log.)
 
+### Head v2 (2026-11-04, branch `model/head-v2`)
+
+After real assembly, the head shape was revised: `head_1` 221.0 -> 224.0g
+(mass 2.072 -> 2.075kg), height 91mm -> 56mm (-38.5%), volume -14.3%
+despite the mass increase. Only `head_1`'s mesh/mass/inertia/CoM changed
+(confirmed via diff at every stage: raw export, URDF, MJCF); nothing else
+in the robot moved. Whole-body CoM (base_link-relative) shifted X -3.34mm,
+Y ~0mm, Z -1.13mm (3.52mm total, under the 5mm threshold for redoing the
+reference motion, so the existing `..._newurdf_deg9.pkl` was kept as-is).
+Actuator `kp=17.8`/`forcerange=3.35` (BAM-identified, see "Final URDF
+remodel") and all site positions unchanged.
+
 ### Also found: two more dead CLI arguments (bugs, not used -- discovered while testing)
 
 `open_duck_reference_motion_generator/gait_generator.py`'s `--walk_com_height`
