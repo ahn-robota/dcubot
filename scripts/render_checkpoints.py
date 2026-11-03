@@ -43,7 +43,7 @@ try:
 except ImportError:
     pass  # falls back to a system ffmpeg on PATH, or the PNG-frame fallback below
 
-from playground.dcubot.mujoco_infer import MjInfer
+from playground.dcubot.mujoco_infer import MjInfer, SymmetricPolicy
 from playground.dcubot.joystick import default_config
 
 GRID_SPACING = 1.0  # meters between adjacent envs in the composited scene
@@ -66,12 +66,15 @@ def _sample_command(rng: np.random.Generator, ranges: dict) -> list:
     return [vx, vy, vyaw, 0.0, 0.0, 0.0]
 
 
-def make_envs(model_path: str, onnx_path: str, num_envs: int, seed: int, ranges: dict):
+def make_envs(model_path: str, onnx_path: str, num_envs: int, seed: int, ranges: dict,
+              symmetric_trained: bool = False):
     rng = np.random.default_rng(seed)
     envs = []
     grid_cols = int(np.ceil(np.sqrt(num_envs)))
     for i in range(num_envs):
         infer = MjInfer(model_path, onnx_path, standing=False)
+        if symmetric_trained:
+            infer.policy = SymmetricPolicy(infer.policy, pre_tanh=True)
         mujoco.mj_resetDataKeyframe(infer.model, infer.data, 0)
         row, col = divmod(i, grid_cols)
         infer.data.qpos[0] += col * GRID_SPACING
@@ -141,6 +144,10 @@ def main():
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=str, default="checkpoint_rollout.mp4")
+    parser.add_argument(
+        "--symmetric_trained", action="store_true",
+        help="policy trained with runner.py --symmetric_policy",
+    )
     for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
         parser.add_argument(
             f"--{name}", type=float, nargs=2, default=None, metavar=("MIN", "MAX"),
@@ -154,7 +161,8 @@ def main():
         name: getattr(args, name) or list(getattr(config, name))
         for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw")
     }
-    envs = make_envs(args.model_path, args.onnx_model_path, args.num_envs, args.seed, ranges)
+    envs = make_envs(args.model_path, args.onnx_model_path, args.num_envs, args.seed, ranges,
+                     args.symmetric_trained)
     label = _label_for(args.onnx_model_path)
 
     renderer = mujoco.Renderer(envs[0].model, height=args.height, width=args.width)
