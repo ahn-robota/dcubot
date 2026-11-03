@@ -328,3 +328,17 @@ Duck Mini v2 uses the same 7.4 V STS3215 with BAM-identified kp 17.8 /
 forcerange 3.35; switched to those (`docs/CHANGES_FROM_ORIGINAL.md`, final
 URDF remodel section). Reference-gait saturation on hip_pitch/knee/ankle:
 21-33% -> 10-16% of the time.
+
+## Long run, 200M steps (head-v2 model), started 2026-11-04
+
+User asked for ~200M steps (vs ~27M for the current policy; upstream trains
+150-300M), ~40 h on the lab PC at ~1400 steps/s, while the robot hardware is
+being tested. Run in ~25M-step segments from the current policy (nm5 3.6M,
+which already follows every direction on the head-v2 model: symmetric env
+eval `|r-1|` 0.29), each restoring the best checkpoint of the previous one,
+widening the command ranges toward the 0.3 m/s goal. Every checkpoint keeps
+its eval line and a 30 s / 20-robot video (nothing deleted this time).
+
+| run | ranges | steps | result | notes |
+|---|---|---|---|---|
+| long1 | `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` (same as nm5), from nm5 3.6M | 25.2M planned | | running |
