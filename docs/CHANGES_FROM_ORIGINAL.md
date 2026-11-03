@@ -191,6 +191,19 @@ steps (long1) pure-command following had drifted (forward overshoot up to
 `single_axis_command_prob = 0.3` of the commands (after the 10% zero
 commands: ~10% stand / ~27% single-axis / ~63% mixed).
 
+## 11. Symmetric policy (`runner.py --symmetric_policy`, 2026-11-04, lab PC)
+
+Every run so far broke left/right symmetry on its own: turning works one
+way only (old model left, new model right), although the robot (whole-body
+CoM 0.4 mm off center) and the reference (symmetric turning keys) are
+symmetric. Averaging a trained policy with its mirror at inference
+(`mujoco_infer.py --symmetric`) fixed drift but can't create a turn the
+policy never learned. With `--symmetric_policy` the policy PPO trains is
+pi(o) = (f(o) + M f(M o)) / 2 on the pre-tanh mean (std swapped L/R),
+`playground/dcubot/symmetry.py`, so it is exactly equivariant during
+training. The ONNX export holds f; run it with
+`mujoco_infer.py --symmetric_trained`, which rebuilds pi exactly.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

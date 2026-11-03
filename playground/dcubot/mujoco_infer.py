@@ -10,46 +10,29 @@ import os
 from playground.common.onnx_infer import OnnxInfer
 
 from playground.dcubot.mujoco_infer_base import MJInferBase
+from playground.dcubot.symmetry import mirror_joints, mirror_obs
 from playground.dcubot.joystick import default_config
 
 USE_MOTOR_SPEED_LIMITS = True
 
-# Left/right mirror of a 13-joint vector (actuator order: left leg 5, right
-# leg 5, neck_pitch, head_pitch, head_yaw). The MJCF's right-leg joint axes
-# are the mirror of the left ones, so mirrored angles keep their sign; only
-# head_yaw flips.
-_MIRROR_PERM = np.array([5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 10, 11, 12])
-_MIRROR_SIGN = np.array([1.0] * 12 + [-1.0])
-
-
-def mirror_joints(x):
-    return x[_MIRROR_PERM] * _MIRROR_SIGN
-
-
-def mirror_obs(obs):
-    """Left/right mirror of MjInfer.get_obs's 94-dim observation."""
-    obs = obs.copy()
-    obs[0:3] *= [-1, 1, -1]  # gyro (angular velocity: pseudovector)
-    obs[3:6] *= [1, -1, 1]  # accelerometer
-    obs[6:12] *= [1, -1, -1, 1, 1, -1]  # vx, vy, yaw rate, neck, head pitch, head yaw
-    for start in range(12, 90, 13):  # angles, velocities, 3 past actions, motor targets
-        obs[start:start + 13] = mirror_joints(obs[start:start + 13])
-    obs[90:92] = obs[90:92][::-1]  # foot contacts
-    obs[92:94] *= -1  # gait phase shifted by half a cycle (the other foot leads)
-    return obs
-
-
 class SymmetricPolicy:
-    """Average the policy with its own mirror image: a = (pi(o) + M pi(M o)) / 2.
-    Exactly left/right symmetric by construction, whatever the trained policy's
-    own left/right bias."""
+    """Average the policy with its own mirror image, a = (pi(o) + M pi(M o)) / 2:
+    exactly left/right symmetric. pre_tanh=True averages the pre-tanh means
+    instead of the actions, which reproduces a policy trained with
+    runner.py --symmetric_policy exactly (the ONNX holds f; the trained
+    policy is tanh((f(o) + M f(M o)) / 2))."""
 
-    def __init__(self, policy):
+    def __init__(self, policy, pre_tanh=False):
         self.policy = policy
+        self.pre_tanh = pre_tanh
 
     def infer(self, obs):
-        mirrored = mirror_joints(self.policy.infer(mirror_obs(obs)))
-        return 0.5 * (self.policy.infer(obs) + mirrored)
+        a = self.policy.infer(obs)
+        a_m = mirror_joints(self.policy.infer(mirror_obs(obs)))
+        if self.pre_tanh:
+            atanh = lambda x: np.arctanh(np.clip(x, -0.999999, 0.999999))
+            return np.tanh(0.5 * (atanh(a) + atanh(a_m)))
+        return 0.5 * (a + a_m)
 
 
 class MjInfer(MJInferBase):
@@ -350,6 +333,10 @@ if __name__ == "__main__":
         help="average the policy with its left/right mirror image (removes its yaw bias)",
     )
     parser.add_argument(
+        "--symmetric_trained", action="store_true",
+        help="policy was trained with runner.py --symmetric_policy: rebuild it exactly",
+    )
+    parser.add_argument(
         "--heading_hold", type=float, default=0.0, metavar="K",
         help="hold the heading while no turn command is given: yaw command = "
         "K * heading error (rad/s per rad), clipped to the turn range; 0 = off",
@@ -377,8 +364,8 @@ if __name__ == "__main__":
     mjinfer = MjInfer(args.model_path, onnx_path, args.standing)
     mjinfer.watch_dir = args.watch_dir
     mjinfer.heading_gain = args.heading_hold
-    if args.symmetric:
-        mjinfer.policy = SymmetricPolicy(mjinfer.policy)
+    if args.symmetric or args.symmetric_trained:
+        mjinfer.policy = SymmetricPolicy(mjinfer.policy, pre_tanh=args.symmetric_trained)
     for name, attr in (("lin_vel_x", "COMMANDS_RANGE_X"), ("lin_vel_y", "COMMANDS_RANGE_Y"),
                        ("ang_vel_yaw", "COMMANDS_RANGE_THETA")):
         if getattr(args, name) is not None:

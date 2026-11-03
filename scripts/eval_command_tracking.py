@@ -44,10 +44,10 @@ COMMANDS = [
 ]
 
 
-def run(onnx_path, command, symmetric=False):
+def run(onnx_path, command, symmetric=None):
     m = MjInfer(XML, onnx_path, False)
     if symmetric:
-        m.policy = SymmetricPolicy(m.policy)
+        m.policy = SymmetricPolicy(m.policy, pre_tanh=symmetric == "trained")
     m.commands[:3] = list(command)
     model, data = m.model, m.data
     imu = model.site("imu").id
@@ -81,7 +81,7 @@ def run(onnx_path, command, symmetric=False):
     return mean, fell_at
 
 
-def run_env(onnx_path, command, n_envs, symmetric=False, env_fns={}):
+def run_env(onnx_path, command, n_envs, symmetric=None, env_fns={}):
     """Mean velocity over the robots that stayed up, and the fallen fraction."""
     import jax
     import jax.numpy as jp
@@ -100,7 +100,7 @@ def run_env(onnx_path, command, n_envs, symmetric=False, env_fns={}):
         )
     policy = OnnxInfer(onnx_path, awd=True)
     if symmetric:
-        policy = SymmetricPolicy(policy)
+        policy = SymmetricPolicy(policy, pre_tanh=symmetric == "trained")
     cmd = jp.tile(jp.array([*command, 0.0, 0.0, 0.0]), (n_envs, 1))
     state = env_fns["reset"](jax.random.split(jax.random.PRNGKey(0), n_envs))
     state.info["command"] = cmd
@@ -135,8 +135,12 @@ def main():
         "turn command can be smaller than the robot's own yaw drift)",
     )
     parser.add_argument(
-        "--symmetric", action="store_true",
-        help="evaluate mujoco_infer's SymmetricPolicy",
+        "--symmetric", action="store_const", const="action", default=None,
+        help="evaluate mujoco_infer's SymmetricPolicy (action average)",
+    )
+    parser.add_argument(
+        "--symmetric_trained", action="store_const", const="trained", dest="symmetric",
+        help="policy trained with runner.py --symmetric_policy (pre-tanh average)",
     )
     parser.add_argument(
         "--env", type=int, default=0, metavar="N",

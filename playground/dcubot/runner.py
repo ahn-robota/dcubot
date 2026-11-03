@@ -10,6 +10,7 @@ from mujoco_playground.config import locomotion_params
 from playground.dcubot import randomize
 from playground.common.runner import BaseRunner
 from playground.dcubot import joystick
+from playground.dcubot.symmetry import make_symmetric_ppo_networks
 
 # The borrowed "BerkeleyHumanoidJoystickFlatTerrain" PPO config defaults to
 # num_envs=8192, which needs more VRAM than some machines have (e.g. this
@@ -41,13 +42,17 @@ class DcubotRunner(BaseRunner):
         self.ppo_training_params["num_envs"] = self.num_envs
         self.ppo_training_params["num_evals"] = self.num_evals
 
+        make_networks = (
+            make_symmetric_ppo_networks if self.symmetric_policy
+            else ppo_networks.make_ppo_networks
+        )
         if "network_factory" in self.ppo_params:
             network_factory = functools.partial(
-                ppo_networks.make_ppo_networks, **self.ppo_params.network_factory
+                make_networks, **self.ppo_params.network_factory
             )
             del self.ppo_training_params["network_factory"]
         else:
-            network_factory = ppo_networks.make_ppo_networks
+            network_factory = make_networks
         self.ppo_training_params["num_timesteps"] = self.num_timesteps
         print(f"PPO params: {self.ppo_training_params}")
 
@@ -96,6 +101,7 @@ class DcubotRunner(BaseRunner):
         self.restore_checkpoint_path = args.restore_checkpoint_path
         self.num_evals = args.num_evals
         self.num_envs = args.num_envs
+        self.symmetric_policy = args.symmetric_policy
         print(f"Observation size: {self.obs_size}")
 
 
@@ -131,6 +137,12 @@ def main() -> None:
         default=DCUBOT_NUM_ENVS,
         help="Parallel env count -- scale to the GPU's VRAM (default 1024, "
         "safe for a 6GB GPU; raise for a GPU with more VRAM).",
+    )
+    parser.add_argument(
+        "--symmetric_policy",
+        action="store_true",
+        help="train a left/right symmetric policy, pi(o) = (f(o) + M f(M o)) / 2 "
+        "(playground/dcubot/symmetry.py); run it with mujoco_infer.py --symmetric_trained",
     )
     for name in ("lin_vel_x", "lin_vel_y", "ang_vel_yaw"):
         parser.add_argument(
