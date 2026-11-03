@@ -48,7 +48,7 @@ import numpy as np
 from playground.common.poly_reference_motion_numpy import PolyReferenceMotion
 
 XML = "playground/dcubot/xmls/scene_flat_terrain.xml"
-PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional.pkl"
+PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl"
 SEGMENT_SECONDS = 3.0
 
 # Same six directions as the "omni" recordings, as (dx, dy, dtheta) pkl keys.
@@ -147,6 +147,7 @@ def main():
     parser.add_argument(
         "--source", choices=list(SOURCES.keys()) + ["pkl"], default="omni"
     )
+    parser.add_argument("--pkl", default=PKL)
     args = parser.parse_args()
 
     m = mujoco.MjModel.from_xml_path(XML)
@@ -155,7 +156,7 @@ def main():
 
     recordings = {}
     if args.source == "pkl":
-        prm = PolyReferenceMotion(PKL)
+        prm = PolyReferenceMotion(args.pkl)
         sequence = [(label, f"{label} {cmd}") for label, cmd in PKL_SEQUENCE]
         for (label, name), (_, cmd) in zip(sequence, PKL_SEQUENCE):
             recordings[name] = load_pkl_motion(prm, cmd, d.qpos[:7].copy())
