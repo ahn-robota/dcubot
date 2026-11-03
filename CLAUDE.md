@@ -15,7 +15,7 @@
 | 경로 | 역할 |
 |---|---|
 | `playground/dcubot/` | 디쿠봇 환경: `joystick.py`(보상·관측·명령 범위), `runner.py`(학습 진입점), `randomize.py`(도메인 랜덤화), `mujoco_infer.py`(키보드 조종 뷰어), `xmls/`(MJCF) |
-| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 사용 중 (최종 URDF용). `polynomial_coefficients_omnidirectional.pkl`은 구모델용, 비교용 |
+| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional_headv2_deg9.pkl` 사용 중 (머리 수정 반영). `_newurdf_deg9.pkl`(머리 수정 전)·`_omnidirectional.pkl`(구모델)은 비교용으로 남겨둠 |
 | `playground/common/` | 원본 Open Duck 공용 코드: 보상, 레퍼런스 모션, ONNX 내보내기, 공용 러너 |
 | `robot_description/`, `tools/` | 최종 URDF와 MJCF 생성기(`tools/gen_dcubot_mjcf.py`) |
 | `scripts/` | 평가·검증: `eval_command_tracking.py`(명령 따라가기 점수), `render_checkpoints.py`(체크포인트 영상), `replay_reference.py`(레퍼런스 점검) 등 |
@@ -88,12 +88,12 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 재현 절차: [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md)
 - [x] **머리 형상 수정 반영 (노트북, 2026-11-04, 브랜치 `model/head-v2`)**: 실물 조립 후 머리 형상 소폭 변경, 질량 2.072→2.075 kg
   - head_1만 변경 확인(질량 221.0→224.0g, 높이 91→56mm, 부피 −14.3%), 나머지 링크·조인트는 전부 동일 (cos=1.000 교차검증)
-  - 전체 CoM 이동 3.52mm (X −3.34, Y ~0, Z −1.13) — 5mm 미만이라 **레퍼런스 모션은 재생성 안 함**, 기존 `..._newurdf_deg9.pkl` 그대로 사용
+  - 전체 CoM 이동 3.52mm (X −3.34, Y ~0, Z −1.13) — 5mm 미만 기준으로는 재생성 불필요했지만, 사용자가 Placo에서 회전 동작을 새 머리 모델로 직접 보고 싶다고 해서 **레퍼런스 모션도 재생성함**: `polynomial_coefficients_omnidirectional_headv2_deg9.pkl` (격자·설정은 기존과 동일, degree=9, 0% 깨짐 확인). `joystick.py`가 이걸 가리킴
   - kp=17.8/forcerange=3.35, IMU·발 site, home 높이 전부 변화 없음 확인
   - 자세한 내용: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Head v2"
 - [ ] **다음 (실습실 PC가 할 일)**:
   1. `git pull`, `uv sync`, 스모크 테스트 (obs `(94,)`, action `13`)
-  2. 기존 최종 정책(`nm5` 3.6M, `checkpoints/nm5/2026_11_03_090557_3604480.onnx`)을 **새 머리 모델**로 평가해서 머리 질량 변화로 못 걷게 됐는지 확인:
+  2. 기존 최종 정책(`nm5` 3.6M, `checkpoints/nm5/2026_11_03_090557_3604480.onnx`)을 **새 머리 모델 + 새 레퍼런스 모션**으로 평가해서 변화로 못 걷게 됐는지 확인:
      ```bash
      uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 checkpoints/nm5/2026_11_03_090557_3604480.onnx
      uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 --symmetric checkpoints/nm5/2026_11_03_090557_3604480.onnx
