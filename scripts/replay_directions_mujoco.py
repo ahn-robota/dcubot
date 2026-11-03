@@ -123,22 +123,45 @@ def load_pkl_motion(prm, command, home_qpos_base):
     joints_pos[0:13], joints_vel[13:26], foot_contacts[26:28],
     base_linear_vel[28:31], base_angular_vel[31:34]; joints in Placo order
     left leg(5), head(3), right leg(5).
+
+    base_linear_vel/base_angular_vel are Placo's own per-frame estimate,
+    not used by training (custom_rewards.py only reads [0:28] -- "Placo's
+    base velocity isn't reliable", see docs/CHANGES_FROM_ORIGINAL.md). Raw
+    per-frame, they oscillate within a single gait cycle (e.g. a turn
+    command's instantaneous *linear* velocity swings as wide as a forward
+    command's, even though the net motion should be close to a pure
+    rotation) -- integrating them directly made turning segments visibly
+    wrong. Averaged over one full gait cycle (nb_steps_in_period) the
+    within-cycle sway cancels and what's left is each axis's real net
+    drift rate, which is what gets integrated here instead; the averaged
+    linear-velocity vector is re-rotated by the base's own accumulated yaw
+    at each step (it was only ever valid in the frame of the single Placo-
+    simulated cycle it came from, not across many repeated+rotated cycles).
     """
     fps = prm.fps
     n = int(SEGMENT_SECONDS * fps)
+    period_n = prm.nb_steps_in_period
     home_quat = home_qpos_base[3:7]
+
+    cycle_refs = [np.array(prm.get_reference_motion(*command, i)) for i in range(period_n)]
+    avg_lin_vel = np.mean([r[28:30] for r in cycle_refs], axis=0)
+    avg_ang_vel = np.mean([r[33] for r in cycle_refs])
+
     xy, yaw = np.zeros(2), 0.0
     root_pos, root_quat, joints_pos = [], [], []
     for i in range(n):
-        ref = np.array(prm.get_reference_motion(*command, i))
+        ref = cycle_refs[i % period_n]
         joints_pos.append(np.concatenate([ref[0:5], ref[8:13], ref[5:8]]))
         root_pos.append([xy[0], xy[1], home_qpos_base[2]])
         yaw_quat = np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
         quat = np.zeros(4)
         mujoco.mju_mulQuat(quat, yaw_quat, home_quat)
         root_quat.append(quat)
-        xy += ref[28:30] / fps
-        yaw += ref[33] / fps
+        c, s = np.cos(yaw), np.sin(yaw)
+        world_lin_vel = np.array([c * avg_lin_vel[0] - s * avg_lin_vel[1],
+                                   s * avg_lin_vel[0] + c * avg_lin_vel[1]])
+        xy = xy + world_lin_vel / fps
+        yaw += avg_ang_vel / fps
     return np.array(root_pos), np.array(root_quat), np.array(joints_pos), fps
 
 
