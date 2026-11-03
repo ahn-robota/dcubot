@@ -2,9 +2,10 @@
 
 Goal: get a policy that actually follows velocity commands (the 50M main
 run stands still -- `docs/RESULTS_omni_1024_50m.md`). User-approved: the
-lab PC runs, evaluates and modifies code on its own for ~36 h. All config
-changes live on branch `auto/2026-10-28`; master is untouched apart from a
-pointer in `CLAUDE.md`.
+lab PC runs, evaluates and modifies code on its own for ~36 h. Done on
+branch `auto/2026-10-28`, merged into master on 2026-11-03. The distilled,
+repeatable procedure is [`TRAINING_RECIPE.md`](TRAINING_RECIPE.md); this file
+is the full record, including every attempt that didn't work.
 
 Common to every run unless noted: lab PC RTX 3080, `--task
 flat_terrain_train --num_envs 1024`, `XLA_PYTHON_CLIENT_MEM_FRACTION=0.85`.

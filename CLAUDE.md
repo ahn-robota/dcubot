@@ -14,11 +14,12 @@
 
 | 경로 | 역할 |
 |---|---|
-| `playground/dcubot/` | 디쿠봇 환경: `joystick.py`(보상·관측·명령 범위), `runner.py`(학습 진입점), `xmls/`(MJCF) |
-| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 사용 중 (2026-11-02 최종 URDF 리모델용, 아래 진행 상황 참고). 이전 `polynomial_coefficients_omnidirectional.pkl`은 구모델용, 비교용으로 남겨둠 |
-| `playground/common/` | 원본 Open Duck 공용 코드: 보상, 레퍼런스 모션, 도메인 랜덤화, ONNX 내보내기, 공용 러너 |
-| `scripts/` | 검증·평가 스크립트 (레퍼런스 점검/재생, 방향 데모, 외란 평가) |
-| `docs/` | 원본과 달라진 점, 검증 결과 |
+| `playground/dcubot/` | 디쿠봇 환경: `joystick.py`(보상·관측·명령 범위), `runner.py`(학습 진입점), `randomize.py`(도메인 랜덤화), `mujoco_infer.py`(키보드 조종 뷰어), `xmls/`(MJCF) |
+| `playground/dcubot/data/` | 레퍼런스 모션. `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 사용 중 (최종 URDF용). `polynomial_coefficients_omnidirectional.pkl`은 구모델용, 비교용 |
+| `playground/common/` | 원본 Open Duck 공용 코드: 보상, 레퍼런스 모션, ONNX 내보내기, 공용 러너 |
+| `robot_description/`, `tools/` | 최종 URDF와 MJCF 생성기(`tools/gen_dcubot_mjcf.py`) |
+| `scripts/` | 평가·검증: `eval_command_tracking.py`(명령 따라가기 점수), `render_checkpoints.py`(체크포인트 영상), `replay_reference.py`(레퍼런스 점검) 등 |
+| `docs/` | 학습 절차, 원본과 달라진 점, 실험 기록 |
 | `checkpoints/` | 학습 결과(`checkpoints/<실험이름>/`). git에 올리지 않음 |
 
 ## 작업 규칙
@@ -45,16 +46,26 @@
 
 ## 자주 쓰는 명령 (저장소 루트에서)
 
+학습 절차 전체(단계별 명령 범위, 체크포인트 고르는 법): [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md)
+
 ```bash
 uv sync                                              # uv.lock 기준 환경 구성
 uv run python -c "import jax; print(jax.devices())"  # CudaDevice 확인
 
-# 학습 (--num_envs, MEM_FRACTION은 위 표의 PC별 값)
+# 학습 (--num_envs, MEM_FRACTION은 위 표의 PC별 값, 명령 범위는 단계별)
 XLA_PYTHON_CLIENT_MEM_FRACTION=<비율> uv run python -u -m playground.dcubot.runner \
   --task flat_terrain_train --num_envs <N> \
-  --output_dir checkpoints/<실험이름> --num_timesteps <스텝>
+  --output_dir checkpoints/<실험이름> --num_timesteps <스텝> --num_evals <N> \
+  --lin_vel_x <MIN> <MAX> --lin_vel_y <MIN> <MAX> --ang_vel_yaw <MIN> <MAX> \
+  [--restore_checkpoint_path $PWD/checkpoints/<이전 실험>/<체크포인트>]   # 이어서 학습 (절대경로)
 
-# 이어서 학습: 위 명령에 --restore_checkpoint_path checkpoints/<실험이름>/<체크포인트> 추가
+# 평가: 명령 따라가기 (1.0=완벽, 0=제자리). --env N은 로봇 N대·밀기 포함 (GPU 사용)
+uv run python scripts/eval_command_tracking.py [--env 64] --scale 0.75 --turn 0.15 [--symmetric] <policy.onnx ...>
+
+# 키보드 조종 뷰어 (↑↓ 전후, ←→ 옆걸음, Q/E 회전, Space 정지)
+uv run python -m playground.dcubot.mujoco_infer -o <policy.onnx> \
+  --lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15 --symmetric --heading_hold 1.0
+
 uv run tensorboard --logdir checkpoints/<실험이름>
 ```
 
@@ -66,52 +77,13 @@ uv run tensorboard --logdir checkpoints/<실험이름>
 
 ## 현재 진행 상황과 다음 할 일
 
-- [x] 원점 재시작: 원본 `open_duck_mini_v2` 구조로 `joystick.py` 재작성, 전방향 레퍼런스 모션 연결
-- [x] 노트북 검증: 레퍼런스 재생, 짧은 전방향 검증 학습(3.6M 스텝) 통과
-- [x] `uv.lock` 고정, `--num_envs` 인자, 전진 전용 pkl 삭제
-- [x] 실습실 PC 환경 구성 및 노트북 검증 결과와 비교 (일치, `docs/VERIFICATION_2026-10-27.md` 하단)
-- [x] 실습실 PC `num_envs` 결정: 1024 (2048은 메모리 부족, 자세한 내용은 `docs/VERIFICATION_2026-10-27.md` 하단)
-- [x] 실습실 PC 1024 처리량 측정: 768 steps/s (노트북 495) → 50M 약 18시간
-- [x] 실습실 PC 본 학습 `omni_1024_50m` 완료: 2026-10-27 15:21 ~ 10-28 09:39 (약 18시간, 52,264,960 스텝, 오류 없음)
-  - 설정: `--num_timesteps 50000000`, `--num_envs 1024`, `--num_evals` 기본 30, MEM_FRACTION 0.85, 그 외는 노트북 검증과 동일
-  - 결과: reward 25.6 → 16M까지 242로 상승, 이후 230~273 / ep_len 575~650에서 평평. 최종 270.9 / 621.2
-  - **정책이 속도 명령을 따라 걷지 않음 (제자리에 서서 스텝만 함).** 16.2M / 41.5M / 최종 모두 학습 환경에서 확인. 자세한 내용: [`docs/RESULTS_omni_1024_50m.md`](docs/RESULTS_omni_1024_50m.md)
-  - 체크포인트 30개(+ `.onnx`): 실습실 PC `checkpoints/omni_1024_50m/` (git에 없음)
-- [x] 제자리 서기 원인 확인 (노트북): 3.6M 정책도 처음부터 안 걸음(후진/좌측 속도 거의 0, 전진은 넘어짐) → 16M 이후 생긴 문제 아님. 원본과 비교: `tracking_sigma=0.01`은 원본 값 그대로인데, `ang_vel_yaw` 범위(±0.103)가 `sqrt(sigma)=0.1`과 거의 같아서 가만히 있어도 회전 보상을 거의 다 받음 (원본은 범위가 sqrt(sigma)의 10배라 거의 안 받음). lin_vel_x/y는 원본과 비슷한 비율이라 이것만으로 전부 설명은 안 됨 (`alive` 비중 98%, 학습 규모 차이도 후보). 자세한 내용: [`docs/RESULTS_omni_1024_50m.md`](docs/RESULTS_omni_1024_50m.md)
-- [ ] 다음 (사용자 승인됨, **아직 검증 안 됨**): `tracking_sigma` 0.01→0.003, `ang_vel_yaw` 범위 ±0.103→±0.3로 조합 테스트. 노트북에서 2M 스텝 검증 학습 시작했으나 사용자가 자리를 비워 **초기화(step 0)만 찍고 중단**, 체크포인트/로그 삭제함. **실습실 PC에서 이어서 돌려줘**:
-  ```bash
-  XLA_PYTHON_CLIENT_MEM_FRACTION=<PC별 값> uv run python -u -m playground.dcubot.runner \
-    --task flat_terrain_train --num_envs <N> \
-    --output_dir checkpoints/sigma_fix_test --num_timesteps 2000000 --num_evals 12
-  ```
-  끝나면 고정 명령으로 8초 굴려서 월드좌표 속도가 실제로 명령을 따라가는지 확인 (방법은 `docs/RESULTS_omni_1024_50m.md`의 "Command-tracking check" 참고). 결과 보고 다음 결정.
-- [x] **실습실 PC 자동 실험 완료 (2026-10-28 12:30 ~ 10-29 17:10)**: 처음으로 명령을 따라 걷는 정책
-  - 결과·설정·과정 전부: 브랜치 `auto/2026-10-28`의 `docs/AUTO_EXPERIMENTS_2026-10-28.md` ("Final result"). master에는 아직 병합 안 함 (사용자 결정)
-  - 선택된 정책: `cur5` 7.2M (실습실 PC `checkpoints/cur5/2026_10_29_110034_7208960.onnx`, git에 없음). 전진·후진·좌우·좌우회전 모두 명령 방향으로 이동 (느린 범위 ±0.1 m/s, ±0.1 rad/s)
-  - 핵심 원인과 해결: 발 관련 보상(`feet_air_time`/`feet_gait`/`feet_clearance`) 복원, 방향별 단계 학습(전진→후진→좌우→회전), `alive` 5, imitation 보상 수정, 회전 레퍼런스 연결(`ref_yaw_scale`). 브랜치의 `docs/CHANGES_FROM_ORIGINAL.md` #5, #7~#9
-  - 남은 문제: 속도 범위 작음, 밀기(push) 상태에서 8초 내 ~30% 넘어짐, 회전 약하고 좌우 비대칭
-  - 평가: `scripts/eval_command_tracking.py` (브랜치 버전에 `--scale`, `--turn`, `--env N` 추가)
-- [ ] 다음: 브랜치 병합 여부 결정, 속도 범위 넓히기, 외피·머리 배터리 반영한 모델로 이 체크포인트에서 이어서 학습
-- [x] **노트북 최종 URDF 리모델 작업 완료 (2026-11-02~03, 브랜치 `model/final-urdf`)**: 외피·머리·배터리팩 실측 반영한 최종 CAD로 URDF/레퍼런스모션/MJCF 전부 재작업
-  - 질량 1.358kg → **2.072kg** (+53%, 몸통+배터리가 가장 큰 증가분, 머리가 2위)
-  - URDF: `robot_description/dcubot.urdf` (구모델과 관절 위치·축 방향 전부 cos=1.000 일치 확인, effort는 실제 서보 스펙(STS3215-C001, 7.4V) 기준 1.91 N·m로 수정 — 이전 3.23은 12V 모델 값이라 틀렸었음)
-  - 레퍼런스 모션: `polynomial_coefficients_omnidirectional_newurdf_deg9.pkl`, 기존과 동일 격자(210개 조합)·설정으로 재생성. `walk_com_height` 0.19→0.22로 수정 필요했음(새 모델 무게중심이 높아져서 0.19면 Placo IK가 깨진 해로 빠짐). **기존 pkl에도 있던 버그 발견**: degree=15 피팅이 JAX 기본 float32 평가에서 사이클 후반부 27% 정도가 터짐 → degree=9로 재피팅해서 해결 (기존 pkl은 안 건드림, 나중에 결정)
-  - MJCF: `playground/dcubot/xmls/dcubot.xml`/`dcubot_train.xml` 재생성(`tools/gen_dcubot_mjcf.py`), 발 사이트 좌우대칭·IMU 위치·home keyframe 전부 새로 계산, 질량/방향/standing안정성/obs·action차원/모방보상 검증 통과
-  - 체크포인트 시각화: `scripts/render_checkpoints.py` 추가 (오프라인, N개 환경 동시 렌더링, 학습엔 영향 없음)
-  - 레퍼런스 생성기(`reference_motion_generator`)는 별도 public 저장소로 분리: [`ahn-robota/dcubot-reference-motion-generator`](https://github.com/ahn-robota/dcubot-reference-motion-generator) (자세한 건 [`docs/GIT_ORGANIZATION.md`](docs/GIT_ORGANIZATION.md))
-  - 자세한 내용·검증 표 전부: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Final URDF remodel"
-  - **구모델(1.358kg) 백업은 아직 삭제 안 함** — 새 레퍼런스 모션이 완전히 안정화(= 본 학습으로 검증)되기 전까지 유지
-- [ ] **다음 (실습실 PC가 할 일, master 병합 후)**:
-  1. `git pull` (이 저장소), 필요하면 `reference_motion_generator`도 clone (보통 불필요 — pkl 이미 커밋돼 있음)
-  2. `uv sync` (새 의존성 `fast-simplification`, `imageio-ffmpeg` 추가됨)
-  3. smoke test: `uv run python -c "from playground.dcubot import joystick; import jax; env = joystick.Joystick(task='flat_terrain_train'); s = env.reset(jax.random.PRNGKey(0)); print(s.obs['state'].shape, env.action_size)"` → `(94,) 13` 나와야 함
-  4. 레퍼런스 재생 검증: `scripts/replay_reference.py --pkl playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl` 돌려서 joint_pos_rew/joint_vel_rew가 1.000 근처인지 확인
-  5. 짧은 검증 학습(2~3M 스텝, `--num_evals` 낮춰서) 한 번 돌리고 결과 보고
-  6. **사용자가 "시작"이라고 명시적으로 말하기 전까지 본 학습(30M+) 시작하지 말 것**
-- [x] 실습실 PC 확인 (2026-11-03): pull, `uv sync`, smoke test `(94,) 13`, 새 pkl 레퍼런스 재생 210개 키 전부 joint pos/vel 1.000 통과. 새 모델은 레퍼런스 걸음에서 hip_pitch/knee/ankle이 토크 한계(1.91 N·m)에 닿는 시간 21~33% (구모델 4~18%)
-- [x] `auto/2026-10-28` master 병합 (사용자 결정). 새 모델에 맞춰 `feet_clearance_target_z` 0.07 → 0.03 (새 MJCF는 발 사이트가 발바닥, home에서 0.000), `feet_gait` 오프셋은 새 레퍼런스와도 95% 일치해서 그대로
-- [x] **실습실 PC: 새 모델(2.072 kg)로 방향별 단계 학습 처음부터 (2026-11-03 02:10 ~ 11:20, 사용자 지시) 완료**: 실험명 `nm1`(전진) → `nm2`(+후진) → `nm3`(+좌우) → `nm4`(+회전) → 남은 시간 전체 섞어서. 기록: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final-URDF model"
-  - 선택된 정책: `nm5` 3.6M + **좌우 대칭 추론**(`mujoco_infer.py --symmetric`), 실습실 PC `checkpoints/nm5/2026_11_03_090557_3604480.onnx`. 학습 범위 x -0.15~0.2, y ±0.12, yaw ±0.15. 64대 학습환경 평가(밀기 포함)에서 전진·후진·좌우·좌우회전 모두 명령의 0.59~0.84배, 8초 내 넘어짐 ~31%
-  - 함께 고친 것: 서보 kp/forcerange → 원본 BAM 실측값(17.8/3.35), `randomize.py` 몸통 ID 버그(1→2), 몸통 무게중심 흔들기 ±5→±1 cm. 전부 `docs/CHANGES_FROM_ORIGINAL.md`
-  - 자세한 결과표: `docs/AUTO_EXPERIMENTS_2026-10-28.md` 하단 "Final result, final-URDF model"
-- [ ] 다음: 밀기 상태 넘어짐(~30%) 줄이기, 속도 범위 더 넓히기(목표 0.3 m/s), 실제 로봇 배포 준비
+- [x] 원점 재시작(원본 `open_duck_mini_v2` 구조), 두 PC 환경 구성·검증 ([`docs/VERIFICATION_2026-10-27.md`](docs/VERIFICATION_2026-10-27.md))
+- [x] 구모델 50M 본 학습 `omni_1024_50m`: 명령을 따라 걷지 않고 제자리에 서 있음 ([`docs/RESULTS_omni_1024_50m.md`](docs/RESULTS_omni_1024_50m.md))
+- [x] 실습실 PC 자동 실험(2026-10-28~29): 발 관련 보상 복원 + 방향별 단계 학습으로 처음 걸음. 구모델 최선 `cur5` 7.2M ([`docs/AUTO_EXPERIMENTS_2026-10-28.md`](docs/AUTO_EXPERIMENTS_2026-10-28.md))
+- [x] 최종 URDF 리모델(노트북, 2026-11-02~03): 외피·머리·배터리 반영 2.072 kg, 레퍼런스 모션·MJCF 재생성. 레퍼런스 생성기는 별도 저장소 ([`docs/GIT_ORGANIZATION.md`](docs/GIT_ORGANIZATION.md))
+- [x] **최종 URDF로 처음부터 학습 (실습실 PC, 2026-11-03 02:10~11:20): 전진·후진·좌우·좌우회전 모두 명령을 따라 걷는 정책**
+  - 정책: `nm5` 3.6M + 좌우 대칭 추론(`--symmetric`). 실습실 PC `checkpoints/nm5/2026_11_03_090557_3604480.onnx` (git에 없음)
+  - 64대 학습환경 평가(밀기 포함): 여섯 방향 모두 명령의 0.59~0.84배, 8초 내 넘어짐 ~31%. 밀기 없으면 넘어지지 않음
+  - 함께 고친 것: 서보 kp/forcerange를 원본 BAM 실측값(17.8/3.35)으로, `randomize.py` 몸통 ID 버그, 몸통 무게중심 흔들기 ±5→±1 cm
+  - 재현 절차: [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md)
+- [ ] 다음 후보 (사용자가 정함): 밀기 상태 넘어짐(~30%) 줄이기, 속도 범위 넓히기(목표 전진 0.3 m/s), 실제 로봇 런타임에 대칭 추론·방향 유지 넣기
