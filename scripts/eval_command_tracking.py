@@ -81,7 +81,7 @@ def run(onnx_path, command, symmetric=False):
     return mean, fell_at
 
 
-def run_env(onnx_path, command, n_envs, env_fns={}):
+def run_env(onnx_path, command, n_envs, symmetric=False, env_fns={}):
     """Mean velocity over the robots that stayed up, and the fallen fraction."""
     import jax
     import jax.numpy as jp
@@ -99,6 +99,8 @@ def run_env(onnx_path, command, n_envs, env_fns={}):
                 [env.get_local_linvel(d)[:2], env.get_gyro(d)[2:]]))),
         )
     policy = OnnxInfer(onnx_path, awd=True)
+    if symmetric:
+        policy = SymmetricPolicy(policy)
     cmd = jp.tile(jp.array([*command, 0.0, 0.0, 0.0]), (n_envs, 1))
     state = env_fns["reset"](jax.random.split(jax.random.PRNGKey(0), n_envs))
     state.info["command"] = cmd
@@ -134,7 +136,7 @@ def main():
     )
     parser.add_argument(
         "--symmetric", action="store_true",
-        help="evaluate mujoco_infer's SymmetricPolicy (single-run mode only)",
+        help="evaluate mujoco_infer's SymmetricPolicy",
     )
     parser.add_argument(
         "--env", type=int, default=0, metavar="N",
@@ -149,7 +151,7 @@ def main():
             if axis == 2 and args.turn is not None:
                 command = (0.0, 0.0, np.sign(command[2]) * args.turn)
             if args.env:
-                mean, fell_frac = run_env(onnx_path, command, args.env)
+                mean, fell_frac = run_env(onnx_path, command, args.env, args.symmetric)
                 falls += fell_frac
                 status = f"fell {100 * fell_frac:.0f}%"
                 fell = fell_frac >= 0.5
@@ -166,6 +168,7 @@ def main():
             )
         print(
             f"{onnx_path}  tracking={np.mean(ratios):+.2f} "
+            f"|ratio-1|={np.mean(np.abs(np.array(ratios) - 1)):.2f} "
             f"(fwd/back/left/right/turn_l/turn_r: {' '.join(f'{r:+.2f}' for r in ratios)})  "
             f"falls={falls:.2f}/{len(COMMANDS)}"
         )
