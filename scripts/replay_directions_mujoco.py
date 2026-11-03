@@ -48,7 +48,7 @@ import numpy as np
 from playground.common.poly_reference_motion_numpy import PolyReferenceMotion
 
 XML = "playground/dcubot/xmls/scene_flat_terrain.xml"
-PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_newurdf_deg9.pkl"
+PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_headv2_deg9.pkl"
 SEGMENT_SECONDS = 3.0
 
 # Same six directions as the "omni" recordings, as (dx, dy, dtheta) pkl keys.
