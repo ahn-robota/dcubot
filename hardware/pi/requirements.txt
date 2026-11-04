@@ -1,0 +1,4 @@
+# Extra packages the digital twin bridge needs beyond what Open Duck Mini
+# Runtime's own install already provides in ~/venv (pypot, rustypot,
+# onnxruntime, adafruit-circuitpython-bno055 -- see docs/HARDWARE_SETUP.md).
+gpiozero

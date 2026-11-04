@@ -119,7 +119,7 @@ Open Duck v2 런타임과 같은 번호 체계 (head_roll=33은 디쿠봇에 없
   ```
 - 라즈베리파이에서는 코드를 직접 고치지 않는다.
 - 저장소 루트는 `~/dcubot`이다 (`git clone`이 그 이름으로 만든다. 노트북의 `DCUBOT/rl_training` 같은 하위 경로가 **없다**).
-- 실행은 항상 기존 `~/venv`(Open Duck 런타임 설치됨, pypot 포함)를 활성화한 뒤 한다. 시스템 `python3`에는 pypot이 없어서 바로 실행하면 `ModuleNotFoundError`가 난다. 추가 패키지가 필요해지면 `hardware/pi/requirements.txt`로 관리한다(현재는 없음 — 기존 `~/venv`로 충분).
+- 실행은 항상 기존 `~/venv`(Open Duck 런타임 설치됨, pypot 포함)를 활성화한 뒤 한다. 시스템 `python3`에는 pypot이 없어서 바로 실행하면 `ModuleNotFoundError`가 난다. 추가 패키지는 `hardware/pi/requirements.txt`로 관리: 디지털 트윈 브리지(`bridge_server.py`, 실물 모드)의 발 스위치 읽기에 `gpiozero`가 필요 — `~/venv`에서 `pip install -r hardware/pi/requirements.txt`.
 
   ```bash
   cd ~/dcubot/hardware/pi/setup
