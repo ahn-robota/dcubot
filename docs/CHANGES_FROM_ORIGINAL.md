@@ -257,7 +257,7 @@ commands still blend the grid's mixed gaits, which move erratically (e.g.
 (0.1, 0.05, 0.05) -> (0.01, 0.11, 0.02)); the base-velocity terms target the
 command anyway (#13).
 
-## 16. Torso orientation cost, weight -5 (2026-11-05, lab PC)
+## 16. Torso orientation cost, weight -20 (2026-11-05, lab PC)
 
 The user wants the torso upright when standing: the trained policies stood
 with the torso pitched ~10 deg forward, and the real robot, posed like that
@@ -268,7 +268,9 @@ command. Since the reference is not regenerated, upstream's
 `cost_orientation` (sum of squared x/y of the IMU z axis; IMU site aligned
 with base_link) is added with weight -5: 0.16/step at 10 deg, about 4x what
 the imitation joint term loses by bending hips/ankles 11 deg off the
-reference.
+reference. That did not move the policy (long9: 11.1 / 10.9 / 11.3 deg
+standing at 0 / 1.8M / 3.6M; the cost was ~1% of the per-step reward), so
+the weight is -20 (0.7/step at 11 deg).
 
 ## Unchanged (confirmed identical to upstream)
 

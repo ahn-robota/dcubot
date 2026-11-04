@@ -216,7 +216,7 @@ def default_config() -> config_dict.ConfigDict:
                 # Not in upstream's config (upstream's function): keep the
                 # torso upright. The reference's leg angles lean it ~11 deg
                 # forward with flat feet (CHANGES #16).
-                orientation=-5.0,
+                orientation=-20.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
         ),
