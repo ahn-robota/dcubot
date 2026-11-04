@@ -1,0 +1,37 @@
+{
+  "_comment": "실기 하드웨어 상수 단일 소스. 절차·배경은 docs/HARDWARE_SETUP.md 참고. 값을 바꿀 때는 이 파일만 고친다 (스크립트에 하드코딩하지 않는다).",
+
+  "servos": {
+    "_comment": "id: STS3215 모터 ID. zero_offset_deg: 0점 보정 당시 기록값(참고용, 소프트웨어 옵셋은 0). invert: true면 실기 런타임에서 부호 반전 필요 (q_servo = -q_sim, 읽기도 각도/속도 -1). joint는 robot_description/dcubot.urdf, playground/dcubot/xmls/dcubot.xml의 조인트 이름과 동일.",
+    "right_hip_yaw":   { "id": 10, "zero_offset_deg": -106.86, "invert": false },
+    "right_hip_roll":  { "id": 11, "zero_offset_deg": -41.63,  "invert": false },
+    "right_hip_pitch": { "id": 12, "zero_offset_deg": -2.68,   "invert": false },
+    "right_knee":      { "id": 13, "zero_offset_deg": 151.78,  "invert": false },
+    "right_ankle":     { "id": 14, "zero_offset_deg": 79.43,   "invert": false },
+    "left_hip_yaw":    { "id": 20, "zero_offset_deg": 165.93,  "invert": true },
+    "left_hip_roll":   { "id": 21, "zero_offset_deg": -148.18, "invert": true },
+    "left_hip_pitch":  { "id": 22, "zero_offset_deg": 29.85,   "invert": false },
+    "left_knee":       { "id": 23, "zero_offset_deg": 178.07,  "invert": false },
+    "left_ankle":      { "id": 24, "zero_offset_deg": -26.77,  "invert": false },
+    "neck_pitch":      { "id": 30, "zero_offset_deg": 34.68,   "invert": false },
+    "head_pitch":      { "id": 31, "zero_offset_deg": 159.6,   "invert": false },
+    "head_yaw":        { "id": 32, "zero_offset_deg": 63.16,   "invert": true }
+  },
+
+  "imu": {
+    "model": "BNO055",
+    "i2c_address": "0x29",
+    "_comment_axis": "v_base = R_base_chip @ v_chip. 칩이 뒤집혀 장착되어 Z가 반전됨 (docs/HARDWARE_SETUP.md IMU 섹션 참고).",
+    "R_base_chip": [
+      [0, 1, 0],
+      [1, 0, 0],
+      [0, 0, -1]
+    ]
+  },
+
+  "foot_switches": {
+    "_comment": "미확인 - 배선 중. 값은 계획이며 실측 전까지 사용하지 말 것.",
+    "left":  { "gpio": 22, "physical_pin": 15, "active_low": true },
+    "right": { "gpio": 27, "physical_pin": 13, "active_low": true }
+  }
+}
