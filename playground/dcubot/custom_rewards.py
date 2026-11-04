@@ -27,8 +27,12 @@ def reward_imitation_dcubot(
     With base_local_linvel/base_local_angvel given, upstream's base-velocity
     terms are added (same forms and weights as upstream reward_imitation:
     lin xy exp(-8 err^2) x1, lin z x1, ang xy exp(-2 err^2) x0.5, ang z x0.5)
-    against the reference's base_linear_vel[28:31]/base_angular_vel[31:34].
-    These are what pay for actually moving at the reference's speed.
+    The planar targets (lin xy, ang z) are the command itself; lin z and
+    ang xy stay the reference's base_linear_vel[28:31]/base_angular_vel[31:34].
+    Upstream uses the reference for all of them, but the Placo reference
+    moves at its own speed, not the command's (forward 1.37x, strafe 0.65x,
+    turn 0.73x the command at the lab eval points), and policies settled on
+    those speeds (CHANGES #13).
     """
     # Placo recording order: left leg [0:5], head [5:8], right leg [8:13].
     ref_joint_pos = jp.concatenate([reference_frame[0:5], reference_frame[8:13]])
@@ -57,10 +61,10 @@ def reward_imitation_dcubot(
     if base_local_linvel is not None:
         ref_lin, ref_ang = reference_frame[28:31], reference_frame[31:34]
         reward += (
-            jp.exp(-8.0 * jp.sum(jp.square(base_local_linvel[:2] - ref_lin[:2])))
+            jp.exp(-8.0 * jp.sum(jp.square(base_local_linvel[:2] - cmd[:2])))
             + jp.exp(-8.0 * jp.square(base_local_linvel[2] - ref_lin[2]))
             + 0.5 * jp.exp(-2.0 * jp.sum(jp.square(base_local_angvel[:2] - ref_ang[:2])))
-            + 0.5 * jp.exp(-2.0 * jp.square(base_local_angvel[2] - ref_ang[2]))
+            + 0.5 * jp.exp(-2.0 * jp.square(base_local_angvel[2] - cmd[2]))
         )
     return jp.nan_to_num(reward * (move_cmd_norm > 0.01))
 

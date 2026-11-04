@@ -742,7 +742,8 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 reference_frame,
                 info["command"],
                 base_local_linvel=self.get_local_linvel(data),
-                base_local_angvel=self.get_gyro(data),
+                # yaw on the low-passed rate, as tracking_ang_vel (CHANGES #12)
+                base_local_angvel=self.get_gyro(data).at[2].set(info["yaw_rate_filt"]),
             )
         else:
             ret["imitation"] = jp.zeros(())

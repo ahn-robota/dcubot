@@ -216,6 +216,19 @@ The reward now uses an exponential moving average of the gyro yaw rate,
 `ang_vel_filter_tau = 0.4` s (one gait cycle; cuts the swing ~6x). The
 observation is unchanged.
 
+## 13. Imitation base-velocity targets: the command, not the reference (2026-11-04, lab PC)
+
+Upstream's imitation base-velocity terms (#8) pull the base toward the
+reference frame's base velocity. The Placo reference does not move at the
+command's speed: at the eval commands it goes 1.37x forward (0.15 -> 0.206
+m/s), 0.94x back, 0.65x sideways (0.09 -> 0.059) and 0.73x turning
+(0.15 x ref_yaw_scale -> 0.11 rad/s, with a 0.09 rad/s swing). The
+policies' 64-robot eval ratios sat on exactly those values (long4: forward
+1.14-1.22, strafe 0.47-0.71, turn 0.39-0.55) whatever tracking_lin_vel and
+tracking_ang_vel asked for. The planar targets (lin xy, ang z) are now the
+command; ang z uses the low-passed yaw rate of #12. Lin z and ang xy still
+follow the reference. Weights and kernels unchanged.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
