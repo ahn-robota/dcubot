@@ -189,6 +189,12 @@ class YawZero:
     def __init__(self):
         self.twist0 = None
 
+    def reset(self):
+        """Re-zero relative yaw to whatever the next frame reports (the Y
+        key in the viewer) -- useful after a magnetometer-free IMU's yaw
+        has drifted, or just to re-align without restarting the viewer."""
+        self.twist0 = None
+
     def apply(self, quat_wxyz):
         twist = _twist_about_z(quat_wxyz)
         if self.twist0 is None:
@@ -210,10 +216,14 @@ def _hinge_qpos_addrs(model):
     return addrs
 
 
+FOOT_ARROW_LEN = 0.15  # m -- deliberately large, meant to be unmissable
+FOOT_ARROW_RADIUS = 0.018
+
+
 def _add_foot_markers(scn, site_pos, contact):
     """Small sphere at each foot site (red=no contact, green=pressed) plus
-    an up-arrow when pressed, added to the viewer's own user_scn so they
-    render without touching the MJCF."""
+    a big up-arrow when pressed, added to the viewer's own user_scn so
+    they render without touching the MJCF."""
     import mujoco
     import numpy as np
 
@@ -224,18 +234,20 @@ def _add_foot_markers(scn, site_pos, contact):
         mujoco.mjv_initGeom(
             scn.geoms[scn.ngeom],
             type=mujoco.mjtGeom.mjGEOM_SPHERE,
-            size=[0.012, 0, 0],
+            size=[0.015, 0, 0],
             pos=pos,
             mat=identity,
             rgba=color,
         )
         scn.ngeom += 1
         if pressed:
+            # Arrow's local +Z is its length; pos is its center, so sit it
+            # on top of the foot and let it stick straight up.
             mujoco.mjv_initGeom(
                 scn.geoms[scn.ngeom],
                 type=mujoco.mjtGeom.mjGEOM_ARROW,
-                size=[0.006, 0.006, 0.05],
-                pos=pos + np.array([0.0, 0.0, 0.03]),
+                size=[FOOT_ARROW_RADIUS, FOOT_ARROW_RADIUS, FOOT_ARROW_LEN],
+                pos=pos + np.array([0.0, 0.0, FOOT_ARROW_LEN / 2 + 0.02]),
                 mat=identity,
                 rgba=[0.1, 0.9, 0.1, 1.0],
             )
@@ -267,9 +279,12 @@ def run_viewer(pi_host, port, model_path):
         elif keycode == ord("M"):
             print("[M] Command mode is not implemented yet -- staying in Mirror "
                   "(docs/DIGITAL_TWIN.md step 3)")
+        elif keycode == ord("Y"):
+            yaw_zero.reset()
+            print("[Y] relative yaw re-zeroed to the current heading")
 
     print(f"viewer (Mirror mode): connecting to {pi_host}:{port}")
-    print("keys: Space = e-stop toggle, T/M = reserved for Command mode (step 3)")
+    print("keys: Space = e-stop toggle, Y = re-zero yaw, T/M = reserved for Command mode (step 3)")
 
     last_print = time.time()
     with mujoco.viewer.launch_passive(m, d, key_callback=key_callback) as viewer:

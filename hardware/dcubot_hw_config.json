@@ -26,7 +26,9 @@
       [0, 1, 0],
       [1, 0, 0],
       [0, 0, -1]
-    ]
+    ],
+    "_comment_fusion_mode": "NDOF(지자기 포함)는 서보/배터리/노트북 자기 간섭으로 정지 중에도 yaw가 튀는 문제가 있었음. 정책은 절대 yaw를 쓰지 않으므로(자이로/가속도/중력만) IMUPLUS(자이로+가속도 융합, 지자기 미사용)를 기본으로 함. adafruit_bno055의 `<이값>_MODE` 상수로 매핑됨.",
+    "fusion_mode": "IMUPLUS"
   },
 
   "foot_switches": {

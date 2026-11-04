@@ -50,6 +50,9 @@ class MockSensors:
         servo_read_ms = 0.1
         return quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms
 
+    def calibration_status(self):
+        return None
+
 
 class RealSensors:
     """Reads the real BNO055 IMU + 13 STS3215 servos + (if wired) 2 foot
@@ -81,6 +84,13 @@ class RealSensors:
         i2c = busio.I2C(board.SCL, board.SDA)
         i2c_addr = int(config["imu"]["i2c_address"], 16)
         self.imu = adafruit_bno055.BNO055_I2C(i2c, address=i2c_addr)
+        # IMUPLUS: gyro+accel fusion only, no magnetometer. The policy
+        # never uses absolute yaw (only gyro/accel/gravity), and NDOF's
+        # magnetometer was picking up interference from the servos/
+        # battery/laptop and jumping yaw by a large offset while
+        # stationary -- see docs/HARDWARE_SETUP.md.
+        fusion_mode = config["imu"].get("fusion_mode", "IMUPLUS")
+        self.imu.mode = getattr(adafruit_bno055, f"{fusion_mode}_MODE")
         self._warned_no_fusion = False
 
         r_base_chip = np.array(config["imu"]["R_base_chip"], dtype=float)
@@ -162,6 +172,9 @@ class RealSensors:
             foot_contact = {"left": False, "right": False}
 
         return quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms
+
+    def calibration_status(self):
+        return self.imu.calibration_status  # (sys, gyro, accel, mag), each 0-3
 
 
 def _quat_mul_np(a, b):
@@ -362,11 +375,13 @@ class Bridge:
             if self._seq % 50 == 0:
                 roll_q, pitch_q = _quat_to_roll_pitch_deg(quat)
                 roll_g, pitch_g = _gravity_to_roll_pitch_deg(accel)
+                cal = self.sensors.calibration_status()
+                cal_str = f" cal(sys/gyro/accel/mag)={cal}" if cal is not None else ""
                 print(
                     f"loop_hz={loop_hz:.1f} servo_read_ms={servo_read_ms:.2f} fault={self.fault} | "
                     f"roll/pitch from quat=({roll_q:+.1f},{pitch_q:+.1f}) "
                     f"from gravity=({roll_g:+.1f},{pitch_g:+.1f}) deg "
-                    f"gravity_base={[round(a, 2) for a in accel]}"
+                    f"gravity_base={[round(a, 2) for a in accel]}{cal_str}"
                 )
 
             elapsed = time.time() - loop_start
