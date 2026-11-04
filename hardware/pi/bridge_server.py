@@ -142,8 +142,13 @@ class Bridge:
             with self._lock:
                 last_cmd = self._last_cmd
                 last_cmd_seq = self._last_cmd_seq
+                last_cmd_recv_t = self._last_cmd_recv_t
                 max_cmd_seq_recv = self._max_cmd_seq_recv
                 client_addr = self._client_addr
+
+            # How long we've been sitting on the command we're about to
+            # echo -- the viewer subtracts this from its RTT measurement.
+            hold_ms = (time.time() - last_cmd_recv_t) * 1000.0 if last_cmd_recv_t is not None else None
 
             self._seq += 1
             msg = make_telemetry(
@@ -162,6 +167,7 @@ class Bridge:
                 echo_cmd_seq=last_cmd_seq,
                 echo_cmd_t_pc=(last_cmd or {}).get("t_pc"),
                 last_cmd_seq_recv=max_cmd_seq_recv,
+                hold_ms=round(hold_ms, 2) if hold_ms is not None else None,
             )
             if client_addr is not None:
                 self.sock.sendto(pack(msg), client_addr)

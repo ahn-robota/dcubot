@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 from pathlib import Path
-from threading import Thread
+from threading import Event, Lock, Thread
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from protocol import COMMAND_HZ, DEFAULT_PORT, SeqLossTracker, make_command, pack, unpack  # noqa: E402
@@ -31,19 +31,47 @@ def start_local_mock_bridge(port):
     time.sleep(0.2)  # let it bind before we start sending
 
 
+class _PingState:
+    def __init__(self):
+        self.lock = Lock()
+        self.telem_loss = SeqLossTracker()
+        self.cmd_loss = SeqLossTracker()  # PC->Pi, inferred from last_cmd_seq_recv
+        self.recv_count = 0
+        self.rtts = []
+
+
+def _ping_recv_loop(sock, state, stop_event):
+    """Timestamps each telemetry packet's arrival the instant recvfrom()
+    returns, in its own thread -- decoupled from the 20Hz send tick, so
+    that cadence doesn't add to the measured RTT."""
+    while not stop_event.is_set():
+        try:
+            data, _ = sock.recvfrom(4096)
+        except socket.timeout:
+            continue
+        except OSError:
+            return
+        t_arrival = time.time()
+        telem = unpack(data)
+        echo_t_pc = telem.get("echo_cmd_t_pc")
+        hold_ms = telem.get("hold_ms")
+        with state.lock:
+            state.telem_loss.observe(telem.get("seq"))
+            state.cmd_loss.observe(telem.get("last_cmd_seq_recv"))
+            state.recv_count += 1
+            if echo_t_pc is not None and hold_ms is not None:
+                rtt_ms = (t_arrival - echo_t_pc) * 1000.0 - hold_ms
+                state.rtts.append(rtt_ms)
+
+
 def run_ping(pi_host, port, duration_s):
-    # Telemetry arrives at 50Hz but we only send/tick at COMMAND_HZ (20Hz) --
-    # a blocking single recvfrom() per tick would let the socket's receive
-    # buffer back up, so every read would return an increasingly stale
-    # packet (RTT would grow without bound). Drain everything queued each
-    # tick instead, non-blocking, and only use the most recent for RTT.
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setblocking(False)
-    telem_loss = SeqLossTracker()
-    cmd_loss = SeqLossTracker()  # PC->Pi, inferred from last_cmd_seq_recv
+    sock.settimeout(0.5)
+    state = _PingState()
+    stop_event = Event()
+    Thread(target=_ping_recv_loop, args=(sock, state, stop_event), daemon=True).start()
+
     seq = 0
-    recv_count = 0
-    rtts = []
     t_start = time.time()
     last_print = t_start
 
@@ -54,37 +82,25 @@ def run_ping(pi_host, port, duration_s):
         cmd = make_command(seq=seq, t_pc=time.time(), torque_request=False, estop=False, joint_target={})
         sock.sendto(pack(cmd), (pi_host, port))
 
-        latest_telem = None
-        while True:
-            try:
-                data, _ = sock.recvfrom(4096)
-            except BlockingIOError:
-                break
-            telem = unpack(data)
-            telem_loss.observe(telem.get("seq"))
-            cmd_loss.observe(telem.get("last_cmd_seq_recv"))
-            recv_count += 1
-            latest_telem = telem
-        if latest_telem is not None:
-            echo_t_pc = latest_telem.get("echo_cmd_t_pc")
-            if echo_t_pc is not None:
-                rtts.append((time.time() - echo_t_pc) * 1000.0)
-
         if time.time() - last_print > 1.0:
-            recent_rtts = rtts[-50:]
+            with state.lock:
+                recent_rtts = state.rtts[-50:]
+                recv_count = state.recv_count
+                pi_pc_loss = state.telem_loss.loss_rate()
+                pc_pi_loss = state.cmd_loss.loss_rate()
             avg_rtt = sum(recent_rtts) / len(recent_rtts) if recent_rtts else float("nan")
             print(
                 f"sent={seq} recv={recv_count} "
-                f"pi->pc_loss={telem_loss.loss_rate():.1%} "
-                f"pc->pi_loss={cmd_loss.loss_rate():.1%} "
-                f"rtt_ms={avg_rtt:.1f}"
+                f"pi->pc_loss={pi_pc_loss:.1%} pc->pi_loss={pc_pi_loss:.1%} "
+                f"rtt_ms={avg_rtt:.2f}"
             )
             last_print = time.time()
 
         time.sleep(1.0 / COMMAND_HZ)
 
+    stop_event.set()
     print("--- ping done ---")
-    if recv_count == 0:
+    if state.recv_count == 0:
         print("WARNING: received 0 telemetry packets -- check --pi-host/--port and that "
               "bridge_server.py is running.")
 

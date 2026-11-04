@@ -40,6 +40,7 @@ def make_telemetry(
     echo_cmd_seq,
     echo_cmd_t_pc,
     last_cmd_seq_recv,
+    hold_ms=None,
     servo_temp_c=None,
     servo_voltage_v=None,
 ):
@@ -59,6 +60,12 @@ def make_telemetry(
         "echo_cmd_seq": echo_cmd_seq,
         "echo_cmd_t_pc": echo_cmd_t_pc,
         "last_cmd_seq_recv": last_cmd_seq_recv,
+        # Time the bridge held the echoed command before this reply went
+        # out (receive-thread latency + wait for the next 50Hz tick) --
+        # the viewer subtracts this so RTT reflects network time only, not
+        # how long the Pi happened to sit on the packet. See
+        # docs/DIGITAL_TWIN.md.
+        "hold_ms": hold_ms,
     }
     if servo_temp_c is not None:
         msg["servo_temp_c"] = dict(servo_temp_c)
