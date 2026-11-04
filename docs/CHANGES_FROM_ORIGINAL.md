@@ -173,7 +173,7 @@ Kernel 0.1 -> 1.0. Added upstream's base-velocity terms (lin xy/z
 `exp(-8 err^2)` x1, ang xy/z `exp(-2 err^2)` x0.5) against the reference's
 base velocity, in the local frame.
 
-## 9. ref_yaw_scale = 10 (branch auto/2026-10-28)
+## 9. ref_yaw_scale = 10 (branch auto/2026-10-28; replaced by #15)
 
 Yaw commands of +-0.05..0.1 rad/s all snapped to the reference grid's
 straight dtheta=0 key (grid 0, +-0.98, +-1.96), so imitation asked for
@@ -242,6 +242,20 @@ reference's own speed at the eval commands is now forward 0.158 for 0.15,
 back -0.116 for -0.11. Strafe (0.6x) and turning (0.07 rad/s for 0.15) stay
 below the command: that is the Placo sweep itself (deviation #2), which only
 regenerating the reference can fix.
+
+## 15. Reference looked up by achieved speed (2026-11-04, lab PC; replaces #9)
+
+The pkl's keys are Placo's intention labels, not the speeds the gaits reach:
+x 1:1, y ~0.57x, turn 0.025 rad/s at key 0.98 and 0.11 at 1.961. With #14,
+`ref_yaw_scale` 10 gave a 0.15 rad/s command a 0.067 rad/s reference turn.
+`InterpolatedPolyReferenceMotion` now measures each pure single-axis gait's
+mean base velocity at load time and maps every command axis to the key that
+reaches it (`jp.interp`, clamped at the fastest gait: x -0.207..0.31, y
++-0.162, turn +-0.11). Single-axis commands now get a reference moving at the
+command's speed (turn capped at 0.11 rad/s); `ref_yaw_scale` is gone. Mixed
+commands still blend the grid's mixed gaits, which move erratically (e.g.
+(0.1, 0.05, 0.05) -> (0.01, 0.11, 0.02)); the base-velocity terms target the
+command anyway (#13).
 
 ## Unchanged (confirmed identical to upstream)
 

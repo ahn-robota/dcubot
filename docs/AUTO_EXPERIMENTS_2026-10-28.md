@@ -346,7 +346,8 @@ its eval line and a 30 s / 20-robot video (nothing deleted this time).
 | long3 | long2 7.2M + **symmetric policy** (`--symmetric_policy`, CHANGES #11), same ranges | 3.6M (stopped) | sym-trained single-run `|r-1|` 0.42 / 0.46 / 0.56; turning symmetric but ~0 (0.28/0.15 -> -0.02/-0.05) | found why turning never trains: CHANGES #12 |
 | long4 | long3 3.6M + yaw tracking on a 0.4 s low-passed yaw rate (CHANGES #12), symmetric policy, same ranges | 25.2M | 64-robot env eval (sym-trained) best 12.6M: `|r-1|` 0.30, fwd/back/left/right/turn_l/turn_r 1.14/1.08/0.71/0.61/0.55/0.54, ~33% fall in 8 s; later checkpoints 0.36-0.40 (strafe decays to ~0.5) | turning now learns (0 -> ~0.5) but ratios sit on the reference's own speeds (fwd 1.37x, strafe 0.65x, turn 0.73x of the command): CHANGES #13 |
 | long5 | long4 12.6M + imitation base-velocity targets = command (CHANGES #13), same ranges | 7.2M (stopped) | sym-trained single-run `|r-1|` 0.43 / 0.53 / 0.46 / 0.51; forward stays 1.4x, strafe 0.7, turning 0.05-0.33 | the reference lookup snaps to a 0.098 m/s grid, so the joint terms still ask for the 0.196 gait: CHANGES #14 |
-| long6 | long4 12.6M + #13 + interpolated reference lookup (CHANGES #14), same ranges | 25.2M planned | | running |
+| long6 | long4 12.6M + #13 + interpolated reference lookup (CHANGES #14), same ranges | 7.2M (stopped) | 64-robot env eval: 5.4M `|r-1|` 0.38 (1.15/1.05/0.68/0.59/0.37/0.29), 7.2M 0.41; long5 5.4M 0.33 (1.10/1.10/0.69/0.61/0.46/0.47); ~33% fall | no gain over long4 12.6M (0.30); with ref_yaw_scale 10 the interpolated turn reference got slower (0.067 rad/s at 0.15): CHANGES #15 |
+| long7 | long4 12.6M + #13 + reference looked up by achieved speed (CHANGES #15), same ranges | 25.2M planned | | running |
 
 The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
 +-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the

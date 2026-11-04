@@ -222,11 +222,6 @@ def default_config() -> config_dict.ConfigDict:
         ),
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
         feet_clearance_target_z=0.03,  # m, foot site; 0.000 at the home pose (final-URDF MJCF) -> 3 cm swing
-        # Yaw commands (+-0.1 rad/s) sit far below the reference grid's turning
-        # keys (+-0.98, +-1.96 labels; the 0.98 key really turns ~0.025 rad/s),
-        # so they all snapped to the straight dtheta=0 gait. Scale the yaw
-        # command for the reference lookup only (auto cur5).
-        ref_yaw_scale=10.0,
         single_axis_command_prob=0.3,  # see sample_command
         # tracking_ang_vel scores a low-passed yaw rate (s; ~one gait cycle):
         # stepping swings the instantaneous rate by 0.16-0.75 rad/s (std),
@@ -725,14 +720,12 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         }
 
         if USE_IMITATION_REWARD:
-            # Omnidirectional: command[0:3] (lin_vel_x/y, ang_vel_yaw) feed
-            # the PRM lookup directly, same as upstream -- see deviation #2
-            # for why these ranges are achieved-velocity-based, not the
-            # pkl's raw intention labels.
+            # command[0:3] is looked up by the speed the reference gaits
+            # actually reach, not the pkl's key labels (CHANGES #15).
             reference_frame = self.PRM.get_reference_motion(
                 info["command"][0],
                 info["command"][1],
-                info["command"][2] * self._config.ref_yaw_scale,
+                info["command"][2],
                 info["gait_step"],
             )
             ret["imitation"] = reward_imitation_dcubot(

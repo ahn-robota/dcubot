@@ -27,7 +27,7 @@ All in `joystick.py` / `custom_rewards.py` / `randomize.py` as committed:
 1. Foot rewards `feet_air_time` 2.0, `feet_gait` 6.0, `feet_clearance` -5.0
    (CHANGES #5). Without them no policy ever lifted a foot.
 2. `alive` 5 instead of 20 (#7), imitation joint kernel 1.0 plus base-velocity
-   terms (#8), `ref_yaw_scale` 10 (#9), `tracking_sigma` 0.003 (#4).
+   terms (#8), reference looked up by achieved speed (#14, #15), imitation base-velocity targets = command (#13), `tracking_sigma` 0.003 (#4).
 3. Actuators: BAM-identified kp 17.8 / forcerange 3.35 (final URDF remodel
    section). Torso randomization on the right body, CoM jitter +-1 cm
    (Also fixed).
