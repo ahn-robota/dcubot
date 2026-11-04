@@ -154,6 +154,8 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 - 되면: 위 설계(Control 패널 슬라이더 그대로 사용) 확정.
 - 안 되면(패널이 없거나 `d.ctrl`이 안 바뀌면): matplotlib Slider로 대체 — 이미 문서에 대안으로 적어둠.
 
+**검증 완료** (사용자 실행, 2026-11-05): Control 패널 슬라이더로 `d.ctrl`이 바뀌고 시뮬 관절도 같이 움직임 확인. Command 모드는 이 방식(Control 패널)으로 구현됨 — `hardware/pc/twin_viewer.py`의 `M` 키로 Mirror↔Command 전환, `T` 키로 토크 요청 토글. 안전 로직(0점 체크, 클램프+슬루 제한, e-stop/워치독 fault 래치)은 `hardware/pi/safety.py` + `bridge_server.py`에 구현, mock 대상 스크립트 테스트로 7개 시나리오 확인(토크 on/off, MJCF 범위 클램프, e-stop, fault 래치, 재요청 시 해제, 워치독 타임아웃).
+
 ## 7. 실행 순서 (최종, 구현 후 그대로 문서에 유지)
 
 1. 노트북·라즈베리파이를 같은 Wi-Fi(핫스팟)에 연결.
