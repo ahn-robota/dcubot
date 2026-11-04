@@ -6,6 +6,7 @@ document per packet (well under the Wi-Fi MTU at 13 joints).
 See docs/DIGITAL_TWIN.md for the full design and rationale.
 """
 import json
+import time
 
 DEFAULT_PORT = 8420
 COMMAND_HZ = 20.0  # the viewer sends at this rate even with nothing new to say
@@ -85,27 +86,38 @@ def make_command(seq, t_pc, torque_request, estop, joint_target):
 
 
 class SeqLossTracker:
-    """Sliding-window loss-rate estimate from a stream of packet sequence
-    numbers, independent of which direction it's used for."""
+    """Time-windowed loss-rate estimate from a stream of packet sequence
+    numbers, independent of which direction it's used for.
 
-    def __init__(self, window=100):
-        self.window = window
-        self._seen = set()
-        self._max_seq = None
+    loss_rate() returns None (not enough data yet) until `warmup_s` has
+    passed since the first observed packet -- otherwise the first couple
+    of packets alone (e.g. seq 1 of 2 seen) read as a large, meaningless
+    loss spike right at startup.
+    """
+
+    def __init__(self, window_s=5.0, warmup_s=1.0):
+        self.window_s = window_s
+        self.warmup_s = warmup_s
+        self._samples = []  # [(t, seq), ...], newest last
+        self._first_t = None
 
     def observe(self, seq):
         if seq is None:
             return
-        if self._max_seq is None or seq > self._max_seq:
-            self._max_seq = seq
-        self._seen.add(seq)
-        lo = self._max_seq - self.window
-        self._seen = {s for s in self._seen if s > lo}
+        now = time.time()
+        if self._first_t is None:
+            self._first_t = now
+        self._samples.append((now, seq))
+        lo = now - self.window_s
+        self._samples = [(t, s) for t, s in self._samples if t >= lo]
 
     def loss_rate(self):
-        if self._max_seq is None or self._max_seq < 1:
-            return 0.0
-        lo = max(0, self._max_seq - self.window + 1)
-        expected = self._max_seq - lo + 1
-        seen_in_window = sum(1 for s in self._seen if s >= lo)
-        return 1.0 - seen_in_window / expected
+        if self._first_t is None or time.time() - self._first_t < self.warmup_s:
+            return None
+        if len(self._samples) < 2:
+            return None
+        seqs = [s for _, s in self._samples]
+        span = max(seqs) - min(seqs) + 1
+        if span <= 0:
+            return None
+        return 1.0 - len(set(seqs)) / span

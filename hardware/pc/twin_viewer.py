@@ -89,9 +89,10 @@ def run_ping(pi_host, port, duration_s):
                 pi_pc_loss = state.telem_loss.loss_rate()
                 pc_pi_loss = state.cmd_loss.loss_rate()
             avg_rtt = sum(recent_rtts) / len(recent_rtts) if recent_rtts else float("nan")
+            fmt_pct = lambda x: "warming up" if x is None else f"{x:.1%}"  # noqa: E731
             print(
                 f"sent={seq} recv={recv_count} "
-                f"pi->pc_loss={pi_pc_loss:.1%} pc->pi_loss={pc_pi_loss:.1%} "
+                f"pi->pc_loss={fmt_pct(pi_pc_loss)} pc->pi_loss={fmt_pct(pc_pi_loss)} "
                 f"rtt_ms={avg_rtt:.2f}"
             )
             last_print = time.time()
