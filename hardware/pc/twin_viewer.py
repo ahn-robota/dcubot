@@ -223,11 +223,12 @@ FOOT_ARROW_RADIUS = 0.018
 def _add_foot_markers(scn, site_pos, contact):
     """Small sphere at each foot site (red=no contact, green=pressed) plus
     a big up-arrow when pressed, added to the viewer's own user_scn so
-    they render without touching the MJCF."""
+    they render without touching the MJCF. Caller resets scn.ngeom=0 for
+    the frame -- this only appends, since the ghost (Command mode) also
+    appends into the same scene."""
     import mujoco
     import numpy as np
 
-    scn.ngeom = 0
     identity = np.eye(3).flatten()
     for pos, pressed in zip(site_pos, contact):
         color = [0.1, 0.9, 0.1, 1.0] if pressed else [0.7, 0.1, 0.1, 0.6]
@@ -254,6 +255,21 @@ def _add_foot_markers(scn, site_pos, contact):
             scn.ngeom += 1
 
 
+def _add_ghost(scn, model, d_ghost, scene_option, pert, alpha=0.35):
+    """Appends the real robot's actual pose (d_ghost, already mj_forward'd)
+    into the viewer's user_scn as translucent geoms, on top of whatever the
+    viewer's own main scene is already showing (the commanded pose). Reuses
+    the multi-instance compositing technique from scripts/render_checkpoints.py
+    -- mjv_addGeoms, not mjv_updateScene (that would replace the viewer's own
+    main scene, which we don't own here)."""
+    import mujoco
+
+    before = scn.ngeom
+    mujoco.mjv_addGeoms(model, d_ghost, scene_option, pert, mujoco.mjtCatBit.mjCAT_ALL, scn)
+    for i in range(before, scn.ngeom):
+        scn.geoms[i].rgba[3] = alpha
+
+
 def run_viewer(pi_host, port, model_path):
     import mujoco
     import mujoco.viewer
@@ -263,35 +279,77 @@ def run_viewer(pi_host, port, model_path):
 
     m = mujoco.MjModel.from_xml_path(model_path)
     d = mujoco.MjData(m)
-    mujoco.mj_resetDataKeyframe(m, d, 0)
+    mujoco.mj_resetDataKeyframe(m, d, 0)  # also sets d.ctrl to the home pose
     home_z = float(d.qpos[2])
     joint_qpos_adr = _hinge_qpos_addrs(m)
     left_site = m.site("left_foot").id
     right_site = m.site("right_foot").id
+
+    # Command mode: a second MjData for the same model, driven purely from
+    # telemetry (the ghost), rendered translucent into the primary d's
+    # scene. Only used while mode == "command".
+    d_ghost = mujoco.MjData(m)
+    scene_option = mujoco.MjvOption()
+    pert = mujoco.MjvPerturb()
+    ctrl_idx_by_name = {m.actuator(i).name: i for i in range(m.nu)}
+
+    mode = ["mirror"]  # list so key_callback (closure) can mutate it
 
     def key_callback(keycode):
         if keycode == 32:  # Space
             link.estop = not link.estop
             print(f"[estop {'ON' if link.estop else 'off'}]")
         elif keycode == ord("T"):
-            print("[T] torque ON/OFF is a Command-mode action -- not implemented yet "
-                  "(docs/DIGITAL_TWIN.md step 3)")
+            link.torque_request = not link.torque_request
+            print(f"[T] torque request -> {'ON' if link.torque_request else 'off'}")
         elif keycode == ord("M"):
-            print("[M] Command mode is not implemented yet -- staying in Mirror "
-                  "(docs/DIGITAL_TWIN.md step 3)")
+            mode[0] = "command" if mode[0] == "mirror" else "mirror"
+            print(f"[M] mode -> {mode[0]}")
         elif keycode == ord("Y"):
             yaw_zero.reset()
             print("[Y] relative yaw re-zeroed to the current heading")
 
-    print(f"viewer (Mirror mode): connecting to {pi_host}:{port}")
-    print("keys: Space = e-stop toggle, Y = re-zero yaw, T/M = reserved for Command mode (step 3)")
+    print(f"viewer: connecting to {pi_host}:{port}")
+    print("keys: Space = e-stop, T = torque request on/off, M = Mirror<->Command, Y = re-zero yaw")
+    print("Command mode: move the Control-panel actuator sliders (right side) to set joint targets.")
 
     last_print = time.time()
     with mujoco.viewer.launch_passive(m, d, key_callback=key_callback) as viewer:
         while viewer.is_running():
             snap = link.snapshot()
             telem = snap["telem"]
-            if telem is not None:
+            viewer.user_scn.ngeom = 0
+
+            if mode[0] == "command":
+                # Primary/opaque robot = commanded pose: teleport straight
+                # from the Control-panel sliders' own d.ctrl, base fixed in
+                # the air (same treatment as Mirror -- this is a target
+                # reference pose, not a measurement).
+                for name, idx in ctrl_idx_by_name.items():
+                    adr = joint_qpos_adr.get(name)
+                    if adr is not None:
+                        d.qpos[adr] = d.ctrl[idx]
+                d.qpos[0:2] = 0.0
+                d.qpos[2] = home_z
+                d.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+                mujoco.mj_forward(m, d)
+                link.joint_target = {name: float(d.ctrl[idx]) for name, idx in ctrl_idx_by_name.items()}
+
+                if telem is not None:
+                    for name, val in telem["joint_pos"].items():
+                        adr = joint_qpos_adr.get(name)
+                        if adr is not None:
+                            d_ghost.qpos[adr] = val
+                    d_ghost.qpos[0:2] = 0.0
+                    d_ghost.qpos[2] = home_z
+                    d_ghost.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+                    mujoco.mj_forward(m, d_ghost)
+                    _add_ghost(viewer.user_scn, m, d_ghost, scene_option, pert)
+            elif telem is not None:
+                # Mirror mode: primary/opaque robot = measured pose. Echo
+                # the measured joints back as joint_target so torque
+                # staying on in this mode (e.g. the user pressed T out of
+                # curiosity) commands no motion -- target == current.
                 final_quat = yaw_zero.apply(telem["imu_quat_wxyz"])
                 d.qpos[0:2] = 0.0
                 d.qpos[2] = home_z
@@ -301,7 +359,9 @@ def run_viewer(pi_host, port, model_path):
                     if adr is not None:
                         d.qpos[adr] = val
                 mujoco.mj_forward(m, d)
+                link.joint_target = dict(telem["joint_pos"])
 
+            if telem is not None:
                 contact = telem.get("foot_contact", {})
                 _add_foot_markers(
                     viewer.user_scn,
@@ -314,7 +374,7 @@ def run_viewer(pi_host, port, model_path):
             if time.time() - last_print > 0.5:
                 if telem is not None:
                     print(
-                        f"bridge loop_hz={telem.get('loop_hz')} servo_read_ms={telem.get('servo_read_ms')} "
+                        f"[{mode[0]}] bridge loop_hz={telem.get('loop_hz')} servo_read_ms={telem.get('servo_read_ms')} "
                         f"fault={telem.get('fault')} torque_enabled={telem.get('torque_enabled')} | "
                         f"link recv={snap['recv_count']} pi->pc_loss={fmt_pct(snap['pi_pc_loss'])} "
                         f"pc->pi_loss={fmt_pct(snap['pc_pi_loss'])} rtt_ms={snap['rtt_ms']:.2f}"

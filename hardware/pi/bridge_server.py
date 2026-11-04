@@ -23,26 +23,48 @@ from protocol import (  # noqa: E402
     FAULT_ESTOP,
     FAULT_TIMEOUT,
     FAULT_TIMEOUT_S,
+    FAULT_ZERO_OFFSET,
     make_telemetry,
     pack,
     unpack,
 )
+from safety import clamp_and_slew, enable_torque_safely, load_joint_limits  # noqa: E402
 
 LOOP_HZ = 50.0
+MJCF_PATH = Path(__file__).resolve().parents[2] / "playground/dcubot/xmls/dcubot.xml"
+DEFAULT_MAX_RATE_DEG_PER_S = 60.0
 
 
 class MockSensors:
     """Synthetic IMU/servo/foot-switch data -- no hardware libraries, so
-    this runs on any machine. Values are plausible-looking, not physical."""
+    this runs on any machine. Values are plausible-looking, not physical.
+
+    While "torque" is off, joints idle on a sine wave (just something that
+    visibly moves in Mirror mode). While "on", they instead lag-track
+    whatever write_targets() last received, approximating a real servo's
+    response -- so Command mode's ghost-vs-commanded comparison has
+    something meaningful to show even with no hardware at all.
+    """
 
     def __init__(self, joint_names):
         self.joint_names = joint_names
         self.t0 = time.time()
+        self.torque_on = False
+        self.pos = dict.fromkeys(joint_names, 0.0)
+        self.commanded = dict(self.pos)
 
     def read(self):
         t = time.time() - self.t0
-        joint_pos = {name: 0.15 * math.sin(t + i) for i, name in enumerate(self.joint_names)}
-        joint_vel = {name: 0.15 * math.cos(t + i) for i, name in enumerate(self.joint_names)}
+        if self.torque_on:
+            for name in self.joint_names:
+                target = self.commanded.get(name, self.pos[name])
+                self.pos[name] += (target - self.pos[name]) * 0.15
+            joint_pos = dict(self.pos)
+            joint_vel = dict.fromkeys(self.joint_names, 0.0)
+        else:
+            joint_pos = {name: 0.15 * math.sin(t + i) for i, name in enumerate(self.joint_names)}
+            joint_vel = {name: 0.15 * math.cos(t + i) for i, name in enumerate(self.joint_names)}
+            self.pos = dict(joint_pos)  # so enable_torque() starts smoothly from "current"
         quat = [1.0, 0.0, 0.0, 0.0]
         gyro = [0.0, 0.0, 0.0]
         accel = [0.0, 0.0, 9.8]
@@ -52,6 +74,17 @@ class MockSensors:
 
     def calibration_status(self):
         return None
+
+    def enable_torque(self):
+        self.torque_on = True
+        self.commanded = dict(self.pos)
+        return True, "mock", dict(self.pos)
+
+    def disable_torque(self):
+        self.torque_on = False
+
+    def write_targets(self, targets_rad):
+        self.commanded.update(targets_rad)
 
 
 class RealSensors:
@@ -68,7 +101,7 @@ class RealSensors:
     it doesn't, swap the reorder in _read_imu().
     """
 
-    def __init__(self, joint_names, config):
+    def __init__(self, joint_names, config, dry_run=False):
         import numpy as np
         import board
         import busio
@@ -77,9 +110,13 @@ class RealSensors:
 
         self.np = np
         self.joint_names = joint_names
+        self.dry_run = dry_run
         ids_by_name = servo_ids(config)
+        self.ids_by_name = ids_by_name
         self.ids = [ids_by_name[n] for n in joint_names]
         self.inverted = inverted_joints(config)
+        if dry_run:
+            print("bridge: --dry-run -- torque/servo-write calls are no-ops below")
 
         i2c = busio.I2C(board.SCL, board.SDA)
         i2c_addr = int(config["imu"]["i2c_address"], 16)
@@ -176,6 +213,48 @@ class RealSensors:
     def calibration_status(self):
         return self.imu.calibration_status  # (sys, gyro, accel, mag), each 0-3
 
+    def _deg_to_rad_by_name(self, positions_deg):
+        """{id: deg} (servo_io's own order/keys) -> {name: rad} (sign
+        un-inverted back to sim convention)."""
+        by_id = {}
+        for name, id_ in self.ids_by_name.items():
+            if id_ in positions_deg:
+                sign = -1.0 if name in self.inverted else 1.0
+                by_id[name] = math.radians(sign * positions_deg[id_])
+        return by_id
+
+    def enable_torque(self):
+        """(ok, info, start_positions_rad). See hardware/pi/safety.py for
+        the zero-offset check and the "start the goal at the current
+        position" trick. --dry-run skips the real hardware call but still
+        exercises the rest of the Command-mode pipeline against real
+        reads."""
+        if self.dry_run:
+            positions_deg = dict(zip(self.ids, self.servo_io.get_present_position(self.ids)))
+            return True, "dry-run (not actually enabled)", self._deg_to_rad_by_name(positions_deg)
+        try:
+            positions_deg = enable_torque_safely(self.servo_io, self.ids)
+        except RuntimeError as e:
+            return False, str(e), {}
+        return True, "ok", self._deg_to_rad_by_name(positions_deg)
+
+    def disable_torque(self):
+        if self.dry_run:
+            return
+        self.servo_io.disable_torque(self.ids)
+
+    def write_targets(self, targets_rad):
+        if self.dry_run:
+            return
+        goal_deg = {}
+        for name, rad in targets_rad.items():
+            id_ = self.ids_by_name.get(name)
+            if id_ is None:
+                continue
+            sign = -1.0 if name in self.inverted else 1.0
+            goal_deg[id_] = sign * math.degrees(rad)
+        self.servo_io.set_goal_position(goal_deg)
+
 
 def _quat_mul_np(a, b):
     """Hamilton product of two (w,x,y,z) quaternions. Plain numpy (no
@@ -264,7 +343,9 @@ class Bridge:
         if args.mock:
             self.sensors = MockSensors(self.joint_names)
         else:
-            self.sensors = RealSensors(self.joint_names, self.config)
+            self.sensors = RealSensors(self.joint_names, self.config, dry_run=args.dry_run)
+
+        self.joint_limits = load_joint_limits(MJCF_PATH)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("0.0.0.0", args.port))
@@ -279,7 +360,9 @@ class Bridge:
 
         self._seq = 0
         self.fault = None
-        self.torque_enabled = False  # real torque-on handling lands with safety.py
+        self.torque_enabled = False
+        self._last_applied = {}  # {name: rad} -- slew-rate baseline while torque is on
+        self._prev_torque_request = False  # edge-detect, not level-detect (see _update_torque)
 
     def _recv_loop(self):
         while True:
@@ -303,6 +386,9 @@ class Bridge:
                     self._max_cmd_seq_recv = seq
 
     def _check_watchdog(self):
+        """Only sets self.fault -- _update_torque() is what actually acts
+        on it (disabling torque, latching). Keeping the two separate is
+        what makes a fault "sticky": once set, nothing here clears it."""
         with self._lock:
             last_recv_t = self._last_cmd_recv_t
             last_cmd = self._last_cmd
@@ -311,8 +397,74 @@ class Bridge:
             self.fault = FAULT_ESTOP
         elif last_recv_t is not None and now - last_recv_t > FAULT_TIMEOUT_S:
             self.fault = FAULT_TIMEOUT
+
+    def _update_torque(self, last_cmd, dt):
+        """The whole torque state machine in one place: a latched fault
+        forces torque off and stays off until the viewer explicitly
+        requests torque again (no auto re-arm on reconnect -- see
+        docs/DIGITAL_TWIN.md step 4); otherwise torque_request's rising/
+        falling edge drives enable/disable, and while on, the commanded
+        joint_target is clamped to the MJCF's own joint range and
+        slew-rate-limited from whatever was actually applied last frame
+        before being written to the servos."""
+        request = bool(last_cmd.get("torque_request")) if last_cmd else False
+        estop_now = bool(last_cmd.get("estop")) if last_cmd else False
+        # Edge, not level: during a comms timeout, self._last_cmd is a
+        # STALE packet that never gets replaced (nothing new is arriving),
+        # so its torque_request can sit at True indefinitely. Treating
+        # that as a fresh "re-request" cleared the fault every single
+        # loop tick, right back to enabled, the instant the timeout set
+        # it -- the watchdog never had a visible effect. A real re-request
+        # is a False->True transition.
+        fresh_request = request and not self._prev_torque_request
+        self._prev_torque_request = request
+
+        if estop_now:
+            # Absolute override: can't be bypassed by also requesting
+            # torque in the same packet (self.fault is already set to
+            # FAULT_ESTOP by _check_watchdog for as long as this holds).
+            if self.torque_enabled:
+                self.sensors.disable_torque()
+                self.torque_enabled = False
+            return
+
         if self.fault is not None:
-            self.torque_enabled = False  # real ramp-down lands with safety.py
+            if fresh_request:
+                # The user pressed the retry/torque button again -- try
+                # again below instead of just sitting stuck forever.
+                self.fault = None
+            elif self.torque_enabled:
+                self.sensors.disable_torque()
+                self.torque_enabled = False
+                return
+            else:
+                return
+
+        if request and not self.torque_enabled:
+            ok, info, start_rad = self.sensors.enable_torque()
+            if ok:
+                self.torque_enabled = True
+                self._last_applied = start_rad
+                print(f"bridge: torque ON ({info})")
+            else:
+                self.fault = FAULT_ZERO_OFFSET
+                print(f"bridge: torque-on REJECTED ({info})")
+                return
+        elif not request and self.torque_enabled:
+            self.sensors.disable_torque()
+            self.torque_enabled = False
+            print("bridge: torque OFF (requested)")
+
+        if self.torque_enabled and last_cmd:
+            target = clamp_and_slew(
+                last_cmd.get("joint_target") or {},
+                self._last_applied,
+                self.joint_limits,
+                self.args.max_rate_deg,
+                dt,
+            )
+            self._last_applied = target
+            self.sensors.write_targets(target)
 
     def run(self):
         Thread(target=self._recv_loop, daemon=True).start()
@@ -327,7 +479,8 @@ class Bridge:
 
         while True:
             loop_start = time.time()
-            hz_window.append(loop_start - last_loop_t)
+            dt = loop_start - last_loop_t
+            hz_window.append(dt)
             hz_window = hz_window[-50:]
             last_loop_t = loop_start
             loop_hz = 1.0 / (sum(hz_window) / len(hz_window)) if hz_window else 0.0
@@ -345,6 +498,8 @@ class Bridge:
                 last_cmd_recv_t = self._last_cmd_recv_t
                 max_cmd_seq_recv = self._max_cmd_seq_recv
                 client_addr = self._client_addr
+
+            self._update_torque(last_cmd, dt if dt > 0 else period)
 
             # How long we've been sitting on the command we're about to
             # echo -- the viewer subtracts this from its RTT measurement.
@@ -393,6 +548,10 @@ def build_arg_parser():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--mock", action="store_true", help="synthetic data, no hardware libraries needed")
     parser.add_argument("--dry-run", action="store_true", help="read real sensors but never write to servos")
+    parser.add_argument(
+        "--max-rate-deg", type=float, default=DEFAULT_MAX_RATE_DEG_PER_S,
+        help="Command-mode joint-target slew-rate limit, deg/s",
+    )
     return parser
 
 
