@@ -154,6 +154,7 @@ from playground.common.rewards import (
     cost_torques,
     cost_action_rate,
     cost_stand_still,
+    cost_orientation,
     reward_alive,
     reward_feet_air_time,
 )
@@ -212,6 +213,10 @@ def default_config() -> config_dict.ConfigDict:
                 feet_air_time=2.0,
                 feet_gait=6.0,
                 feet_clearance=-5.0,
+                # Not in upstream's config (upstream's function): keep the
+                # torso upright. The reference's leg angles lean it ~11 deg
+                # forward with flat feet (CHANGES #16).
+                orientation=-5.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
         ),
@@ -696,6 +701,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             ),
             "torques": cost_torques(data.actuator_force),
             "action_rate": cost_action_rate(action, info["last_act"]),
+            "orientation": cost_orientation(self.get_gravity(data)),
             "alive": reward_alive(),
             "stand_still": cost_stand_still(
                 info["command"],

@@ -352,7 +352,8 @@ current Placo sweep; CHANGES #13-#15 get what they can out of it.
 | long5 | long4 12.6M + imitation base-velocity targets = command (CHANGES #13), same ranges | 7.2M (stopped) | sym-trained single-run `|r-1|` 0.43 / 0.53 / 0.46 / 0.51; forward stays 1.4x, strafe 0.7, turning 0.05-0.33 | the reference lookup snaps to a 0.098 m/s grid, so the joint terms still ask for the 0.196 gait: CHANGES #14 |
 | long6 | long4 12.6M + #13 + interpolated reference lookup (CHANGES #14), same ranges | 7.2M (stopped) | 64-robot env eval: 5.4M `|r-1|` 0.38 (1.15/1.05/0.68/0.59/0.37/0.29), 7.2M 0.41; long5 5.4M 0.33 (1.10/1.10/0.69/0.61/0.46/0.47); ~33% fall | no gain over long4 12.6M (0.30); with ref_yaw_scale 10 the interpolated turn reference got slower (0.067 rad/s at 0.15): CHANGES #15 |
 | long7 | long4 12.6M + #13 + reference looked up by achieved speed (CHANGES #15), same ranges | 25.2M | 64-robot env eval (sym-trained): 25.2M `|r-1|` 0.30, fwd/back/left/right/turn_l/turn_r 1.02/1.06/0.55/0.47/0.63/0.66; 18.0M-23.4M 0.31-0.33; ~34% fall in 8 s | forward/back now ~1.0 and turning best so far (0.6), strafe down to ~0.5. Single-run evals swing turning 0-0.5 between checkpoints while the training env's tracking_ang_vel climbs steadily: judge on the 64-robot eval only |
-| long8 | long7 25.2M, wider ranges `--lin_vel_x -0.2 0.3 --lin_vel_y -0.15 0.15 --ang_vel_yaw -0.15 0.15` | 25.2M planned | | running |
+| long8 | long7 25.2M, wider ranges `--lin_vel_x -0.2 0.3 --lin_vel_y -0.15 0.15 --ang_vel_yaw -0.15 0.15` | 7.2M (stopped) | reward 167 -> 173, ep_len 525 -> 540 | stopped for the upright-torso change |
+| long9 | long8 7.2M + torso orientation cost (CHANGES #16), same ranges as long8 | 25.2M planned | | running |
 
 The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
 +-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the
