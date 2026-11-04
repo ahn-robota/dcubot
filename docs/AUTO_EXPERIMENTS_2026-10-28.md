@@ -339,6 +339,10 @@ eval `|r-1|` 0.29), each restoring the best checkpoint of the previous one,
 widening the command ranges toward the 0.3 m/s goal. Every checkpoint keeps
 its eval line and a 30 s / 20-robot video (nothing deleted this time).
 
+The reference motion is not regenerated (user's decision, 2026-11-05): strafe
+(~0.57x of the key) and turning (at most 0.11 rad/s) stay limited by the
+current Placo sweep; CHANGES #13-#15 get what they can out of it.
+
 | run | ranges | steps | result | notes |
 |---|---|---|---|---|
 | long1 | `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15` (same as nm5), from nm5 3.6M | 19.8M (stopped) | env eval (64 robots, scale 0.75 / turn 0.15): best 14.4M sym `|r-1|` 0.37 / raw 0.33, vs nm5 3.6M sym **0.28** | translation stronger (fwd/back ~1.0-1.25) but turning lost in symmetric mode (0.13/0.15; raw turns right only); falls unchanged ~32%; single-run `|r-1|` peaked at 14.4M (0.37) then 0.40 / 0.48 / 0.55 |
