@@ -85,9 +85,10 @@ class RealSensors:
 
         r_base_chip = np.array(config["imu"]["R_base_chip"], dtype=float)
         self.r_base_chip = r_base_chip
+        # R_chip_base = R_base_chip^T (a rotation matrix's inverse is its
+        # transpose) as a quaternion -- see _read_imu() for how it's used.
         q_mount = _mat_to_quat(r_base_chip)
-        self.q_mount = q_mount
-        self.q_mount_conj = np.array([q_mount[0], -q_mount[1], -q_mount[2], -q_mount[3]])
+        self.q_chip_base = np.array([q_mount[0], -q_mount[1], -q_mount[2], -q_mount[3]])
 
         self.servo_io = FeetechSTS3215IO("/dev/ttyACM0")
 
@@ -122,7 +123,13 @@ class RealSensors:
                 self._warned_no_fusion = True
             quat = (1.0, 0.0, 0.0, 0.0)
         q_chip = np.array(quat, dtype=float)
-        q_base = _quat_mul_np(_quat_mul_np(self.q_mount, q_chip), self.q_mount_conj)
+        # R_world_base = R_world_chip @ R_chip_base (chip's own reported
+        # orientation, composed with the fixed mount) -- NOT a similarity
+        # transform (q_mount*q_chip*q_mount_conj), which was the bug: that
+        # reports R_base_chip itself (a 180-degree flip) when the chip
+        # reads back exactly what it would when the robot is level, which
+        # is precisely what showed up as the robot rendering upside down.
+        q_base = _quat_mul_np(q_chip, self.q_chip_base)
 
         gyro_chip = np.array([0.0, 0.0, 0.0] if None in gyro else gyro, dtype=float)
         accel_chip = np.array([0.0, 0.0, 9.8] if None in accel else accel, dtype=float)
@@ -174,6 +181,32 @@ def _quat_mul_np(a, b):
             w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
         ]
     )
+
+
+def _quat_to_roll_pitch_deg(q):
+    """Standard aerospace (ZYX) quaternion -> roll/pitch, in degrees.
+    Diagnostic only -- just so it's directly comparable to the
+    gravity-vector estimate below; this is not the yaw-zero decomposition
+    the viewer uses for rendering. Plain math (no numpy), so --mock keeps
+    working with no third-party dependency at all."""
+    w, x, y, z = q
+    roll = math.degrees(math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y)))
+    pitch = math.degrees(math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x)))))
+    return roll, pitch
+
+
+def _gravity_to_roll_pitch_deg(accel_base):
+    """roll/pitch implied directly by the measured gravity-reaction vector
+    in base frame (mount-transformed only, no quaternion/fusion involved).
+    Should closely match _quat_to_roll_pitch_deg(quat) while stationary --
+    both describe the same physical tilt from two independent paths. Real
+    divergence is expected only under actual acceleration (walking), not
+    while held still, so a mismatch while still means the quaternion-side
+    transform (mount math or field order) is still wrong."""
+    ax, ay, az = accel_base
+    roll = math.degrees(math.atan2(ay, az))
+    pitch = math.degrees(math.atan2(-ax, math.hypot(ay, az)))
+    return roll, pitch
 
 
 def _mat_to_quat(r):
@@ -327,7 +360,14 @@ class Bridge:
                 self.sock.sendto(pack(msg), client_addr)
 
             if self._seq % 50 == 0:
-                print(f"loop_hz={loop_hz:.1f} servo_read_ms={servo_read_ms:.2f} fault={self.fault}")
+                roll_q, pitch_q = _quat_to_roll_pitch_deg(quat)
+                roll_g, pitch_g = _gravity_to_roll_pitch_deg(accel)
+                print(
+                    f"loop_hz={loop_hz:.1f} servo_read_ms={servo_read_ms:.2f} fault={self.fault} | "
+                    f"roll/pitch from quat=({roll_q:+.1f},{pitch_q:+.1f}) "
+                    f"from gravity=({roll_g:+.1f},{pitch_g:+.1f}) deg "
+                    f"gravity_base={[round(a, 2) for a in accel]}"
+                )
 
             elapsed = time.time() - loop_start
             time.sleep(max(0.0, period - elapsed))
