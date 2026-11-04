@@ -204,6 +204,18 @@ pi(o) = (f(o) + M f(M o)) / 2 on the pre-tanh mean (std swapped L/R),
 training. The ONNX export holds f; run it with
 `mujoco_infer.py --symmetric_trained`, which rebuilds pi exactly.
 
+## 12. tracking_ang_vel on a low-passed yaw rate (2026-11-04, lab PC)
+
+Upstream scores the instantaneous gyro yaw rate. Stepping makes it swing by
+0.16 (stand) / 0.25 (turn in place) / 0.75 (forward) rad/s std, far beyond
+sqrt(tracking_sigma) = 0.055: with a 0.15 rad/s turn command a robot that
+doesn't turn at all scored 0.18/step, about what a correct turn with the
+same swing scores -- no gradient toward turning, which no run ever learned
+properly. (Upstream's +-1.0 rad/s turn commands dwarf the swing.)
+The reward now uses an exponential moving average of the gyro yaw rate,
+`ang_vel_filter_tau = 0.4` s (one gait cycle; cuts the swing ~6x). The
+observation is unchanged.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

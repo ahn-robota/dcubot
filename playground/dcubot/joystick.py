@@ -228,6 +228,11 @@ def default_config() -> config_dict.ConfigDict:
         # command for the reference lookup only (auto cur5).
         ref_yaw_scale=10.0,
         single_axis_command_prob=0.3,  # see sample_command
+        # tracking_ang_vel scores a low-passed yaw rate (s; ~one gait cycle):
+        # stepping swings the instantaneous rate by 0.16-0.75 rad/s (std),
+        # far beyond sqrt(tracking_sigma) = 0.055, so the raw reward barely
+        # depends on the mean turn rate and turning was never learned.
+        ang_vel_filter_tau=0.4,
         # lin_vel_x/y: based on each axis's REAL ACHIEVED velocity, not the
         # pkl's intention labels -- see deviation #2 above. ang_vel_yaw:
         # widened past the achieved scale (0.103) toward upstream's
@@ -386,6 +391,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             "rng": rng,
             "step": 0,
             "gait_step": 0,
+            "yaw_rate_filt": jp.zeros(()),
             "command": cmd,
             "last_act": jp.zeros(self.mjx_model.nu),
             "last_last_act": jp.zeros(self.mjx_model.nu),
@@ -496,6 +502,11 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         p_fz = p_f[..., -1]
         state.info["swing_peak"] = jp.maximum(state.info["swing_peak"], p_fz)
         state.info["gait_step"] += 1
+        # Low-pass yaw rate for tracking_ang_vel (see ang_vel_filter_tau).
+        alpha = jp.exp(-self.dt / self._config.ang_vel_filter_tau)
+        state.info["yaw_rate_filt"] = (
+            alpha * state.info["yaw_rate_filt"] + (1 - alpha) * self.get_gyro(data)[2]
+        )
 
         obs = self._get_obs(data, state.info, contact)
         done = self._get_termination(data)
@@ -685,7 +696,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             ),
             "tracking_ang_vel": reward_tracking_ang_vel(
                 info["command"],
-                self.get_gyro(data),
+                jp.array([0.0, 0.0, info["yaw_rate_filt"]]),
                 self._config.reward_config.tracking_sigma,
             ),
             "torques": cost_torques(data.actuator_force),
