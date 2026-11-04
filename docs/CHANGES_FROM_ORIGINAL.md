@@ -229,6 +229,20 @@ tracking_ang_vel asked for. The planar targets (lin xy, ang z) are now the
 command; ang z uses the low-passed yaw rate of #12. Lin z and ang xy still
 follow the reference. Weights and kernels unchanged.
 
+## 14. Reference lookup interpolated between grid points (2026-11-04, lab PC)
+
+Upstream's `PolyReferenceMotion.vel_to_index` snaps the command to the
+nearest (dx, dy, dtheta) grid point. DCUBOT's grid is 0.098 m/s apart in x
+and y, so every forward command from 0.147 to 0.2 imitated the 0.196 gait
+(0.206 m/s), and long5 (with #13) still walked forward at 1.4x the command:
+the joint terms set the stride. `playground/dcubot/reference_motion.py`
+blends the coefficients of the 8 surrounding grid points trilinearly (same
+period for every gait; a polynomial is linear in its coefficients). The
+reference's own speed at the eval commands is now forward 0.158 for 0.15,
+back -0.116 for -0.11. Strafe (0.6x) and turning (0.07 rad/s for 0.15) stay
+below the command: that is the Placo sweep itself (deviation #2), which only
+regenerating the reference can fix.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

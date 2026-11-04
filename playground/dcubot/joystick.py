@@ -147,7 +147,7 @@ from mujoco_playground._src.collision import geoms_colliding
 from . import constants
 from . import base as open_duck_mini_v2_base
 
-from playground.common.poly_reference_motion import PolyReferenceMotion
+from playground.dcubot.reference_motion import InterpolatedPolyReferenceMotion
 from playground.common.rewards import (
     reward_tracking_lin_vel,
     reward_tracking_ang_vel,
@@ -267,7 +267,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
     def _post_init(self) -> None:
 
         if USE_IMITATION_REWARD:
-            self.PRM = PolyReferenceMotion(DCUBOT_REFERENCE_PKL)
+            self.PRM = InterpolatedPolyReferenceMotion(DCUBOT_REFERENCE_PKL)  # CHANGES #14
 
         self._init_q = jp.array(self._mj_model.keyframe("home").qpos)
         self._default_actuator = self._mj_model.keyframe(
