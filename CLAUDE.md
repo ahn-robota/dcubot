@@ -91,11 +91,11 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 전체 CoM 이동 3.52mm (X −3.34, Y ~0, Z −1.13) — 5mm 미만 기준으로는 재생성 불필요했지만, 사용자가 Placo에서 회전 동작을 새 머리 모델로 직접 보고 싶다고 해서 **레퍼런스 모션도 재생성함**: `polynomial_coefficients_omnidirectional_headv2_deg9.pkl` (격자·설정은 기존과 동일, degree=9, 0% 깨짐 확인). `joystick.py`가 이걸 가리킴
   - kp=17.8/forcerange=3.35, IMU·발 site, home 높이 전부 변화 없음 확인
   - 자세한 내용: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Head v2"
-- [ ] **다음 (실습실 PC가 할 일)**:
-  1. `git pull`, `uv sync`, 스모크 테스트 (obs `(94,)`, action `13`)
-  2. 기존 최종 정책(`nm5` 3.6M, `checkpoints/nm5/2026_11_03_090557_3604480.onnx`)을 **새 머리 모델 + 새 레퍼런스 모션**으로 평가해서 변화로 못 걷게 됐는지 확인:
-     ```bash
-     uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 checkpoints/nm5/2026_11_03_090557_3604480.onnx
-     uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 --symmetric checkpoints/nm5/2026_11_03_090557_3604480.onnx
-     ```
-  3. 평가 결과 보고, **사용자가 "시작"이라고 하면** `nm5` 체크포인트에서 이어서 학습 — [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md) 5단계(전체 방향, 넓은 속도범위) 명령 범위로, 체크포인트마다 64대 평가로 최선 선택
+- [x] **200M 장기 학습 (실습실 PC, 2026-11-04 03:00 ~ 11-06 03:20, 구간 long1~long14)** ([`docs/AUTO_EXPERIMENTS_2026-10-28.md`](docs/AUTO_EXPERIMENTS_2026-10-28.md) "Long run")
+  - 최종 정책: `checkpoints/long14/2026_11_06_000746_7864320.onnx` (실습실 PC에만 있음). 좌우 대칭으로 학습(`--symmetric_policy`)했으므로 실행할 때 `--symmetric_trained`
+  - 64대 학습환경 평가(넓힌 랜덤화·밀기 포함): 여섯 방향 명령의 0.76~0.98배, `|r-1|` 0.11 (`nm5`는 0.29). 몸통 앞 기울기 약 8° (`nm5` 약 11°). 밀기를 받으면 8초 안에 약 33% 넘어짐(변화 없음)
+  - 원본과 달라진 점: `CHANGES_FROM_ORIGINAL.md` #12~#17 (회전 보상 저역통과, 레퍼런스를 실제 속도로 조회·보간, 몸통 기울기 벌점(후진 중 제외), action_rate -1.0, 랜덤화 확대, 최고 속도 0.2 m/s)
+  - 레퍼런스 모션은 재생성하지 않기로 함(사용자 결정): 옆걸음과 회전(최대 0.11 rad/s)은 Placo 기준 동작의 한계에 묶여 있음
+- [ ] **다음**:
+  1. 실물 로봇 무게중심 확인: 전원을 켜고 관절 0°로 세워 앞으로 쏠리는지, 전체 무게(모델 2.075 kg), 라즈베리파이·전자부품 위치. 모델과 다르면 URDF 질량·무게중심을 고치고 최종 정책에서 이어서 학습
+  2. 실물 실행기에 `--symmetric_trained`와 같은 좌우 대칭 추론(`mujoco_infer.py`의 `SymmetricPolicy(pre_tanh=True)`)을 넣기

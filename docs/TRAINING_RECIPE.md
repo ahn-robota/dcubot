@@ -8,17 +8,27 @@ every deviation from upstream Open Duck is in
 
 ## Result
 
-`nm5` 3.6M, run with symmetric inference (`--symmetric`).
-`eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 --symmetric`
-(64 robots in the training env with noise, delays and pushes; fixed commands):
+`long14` 7.9M, the end of the 200M-step long run (2026-11-06), trained with
+`--symmetric_policy` and run with `--symmetric_trained`.
+`eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15 --symmetric_trained`
+(64 robots in the training env with noise, delays, pushes and the wider
+randomization of CHANGES #17; fixed commands):
 
 | fwd 0.15 | back -0.11 | left 0.11 | right -0.11 | turn L 0.15 | turn R -0.15 | fell within 8 s |
 |---|---|---|---|---|---|---|
-| 0.74 | 0.63 | 0.84 | 0.74 | 0.59 | 0.77 | ~31% |
+| 0.98 | 0.98 | 0.97 | 0.85 | 0.76 | 0.84 | ~33% |
 
-(achieved / commanded along the commanded axis). No falls without pushes.
-The checkpoint lives on the lab PC only:
-`checkpoints/nm5/2026_11_03_090557_3604480.onnx`.
+(achieved / commanded along the commanded axis; `|r-1|` 0.11.) Torso pitch
+~8 deg forward standing. Lab PC only:
+`checkpoints/long14/2026_11_06_000746_7864320.onnx`.
+
+The policy before it, `nm5` 3.6M (`|r-1|` 0.29), came from the curriculum
+below; the long run continued from it with the changes listed in
+`AUTO_EXPERIMENTS_2026-10-28.md` "Long run summary" (CHANGES #12-#17). To
+repeat the result, run the curriculum, then continue with the committed
+config, `--symmetric_policy` and
+`--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15`,
+picking checkpoints by the 64-robot eval.
 
 ## What makes it walk
 
@@ -91,7 +101,7 @@ uv run python scripts/eval_command_tracking.py --env 64 --scale 0.75 --turn 0.15
 # keyboard-driven viewer: arrows = fwd/back/strafe, q/e = turn, space = stop
 uv run python -m playground.dcubot.mujoco_infer -o <policy.onnx> \
   --lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15 \
-  --symmetric --heading_hold 1.0
+  --symmetric_trained --heading_hold 1.0   # --symmetric for nm5-style policies
 
 # 30 s video of 20 robots with random commands in the trained range
 MUJOCO_GL=egl uv run python scripts/render_checkpoints.py <policy.onnx> \
@@ -113,6 +123,7 @@ two pieces to behave like the simulation.
 
 - ~30% fall within 8 s under the training env's pushes (0.1-1.0 m/s kicks
   every 5-10 s).
-- Speeds are still small (0.2 m/s forward max) next to the 0.3 m/s goal; a
-  further widening stage from this checkpoint is the next step.
+- Top speed is 0.2 m/s: 0.3 m/s made the stride long for the real robot
+  (the reference's gait period is fixed), CHANGES #17.
+- Very slow commands (+-0.05 m/s) stand still in the noise-free simulator.
 - Slight forward creep (~0.03 m/s) on a stand command.

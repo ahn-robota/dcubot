@@ -358,9 +358,26 @@ current Placo sweep; CHANGES #13-#15 get what they can out of it.
 | long11 | long10 14.4M, same config | stopped at start | | replaced by long12 at the user's sim-to-real request |
 | long12 | long10 14.4M + CHANGES #17 (action_rate -1.0, wider randomization, `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15`), orientation -20 | 25.2M | 64-robot env eval (with the wider randomization): 12.6M `|r-1|` **0.29** (1.02/0.76/0.65/0.60/0.60/0.65), 7.2M 0.37, 16.2M 0.38, 25.2M 0.40; ~33% fall in 8 s. Torso pitch standing 9.1 -> 8.2 (12.6M) -> 6.3 deg (25.2M) | slow backward (-0.1) stops from 7.2M on (single-run back ratio swings 0-1.4 around the eval command's threshold); strafe decays after 18M |
 | long13 | long12 12.6M + orientation cost off while walking backward (CHANGES #16), same config | 25.2M | 64-robot env eval: **16.2M `|r-1|` 0.19** (0.95/1.01/0.80/0.72/0.65/0.73), 10.8M 0.20, 18.0M 0.22, 23.4M 0.26, 25.2M 0.25; ~33% fall in 8 s. Torso pitch standing 8.1-8.9 deg | best policy so far; slow backward (-0.1) still stands in the noise-free single run |
-| long14 | long13 16.2M, same config, last ~22M of the 200M | 22.0M planned | | running |
+| long14 | long13 16.2M, same config, last ~22M of the 200M | 23.6M | 64-robot env eval: **7.9M `|r-1|` 0.11** (0.98/0.98/0.97/0.85/0.76/0.84), 5.9M 0.16, 9.8M 0.20, 11.8M 0.16, 15.7M 0.20, 19.7M 0.21, 23.6M 0.25; ~33% fall in 8 s. Torso pitch 8.5 / 8.1 / 5.5 deg (stand / forward / turn) at 7.9M | **final policy** of the long run. Noise-free single run still stands still on very slow commands (+-0.05 m/s, strafe 0.06), -0.1 back now walks |
 
 The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
 +-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the
 policy's own symmetry breaking. Training commands mix all three axes, while
 the eval (and the robot) use pure ones -- long2 adds single-axis commands.
+
+### Long run summary (2026-11-04 03:00 -> 2026-11-06 03:20, ~202M steps)
+
+Final policy: `checkpoints/long14/2026_11_06_000746_7864320.onnx` (lab PC
+only), trained with `--symmetric_policy`, run with `--symmetric_trained`.
+64-robot env eval (wider randomization, pushes), command ratios
+fwd/back/left/right/turn_l/turn_r 0.98/0.98/0.97/0.85/0.76/0.84, `|r-1|`
+0.11 (nm5, the policy before the long run: 0.29 with forward/back at
+0.74/0.63). Torso pitch ~8 deg standing (nm5 ~11). Falls under pushes
+unchanged at ~33% within 8 s.
+
+What moved it, in order: turning reward on a low-passed yaw rate (#12),
+reference looked up by achieved speed (#14, #15) with command-targeted base
+velocity (#13), and the sim-to-real config (#16 orientation cost off while
+walking back, #17 action_rate -1.0, wider randomization, 0.2 m/s top speed).
+Judge checkpoints on the 64-robot eval only: the per-checkpoint single-run
+eval swings turning and backward between 0 and 1.8.
