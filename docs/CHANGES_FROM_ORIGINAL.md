@@ -270,7 +270,10 @@ with base_link) is added with weight -5: 0.16/step at 10 deg, about 4x what
 the imitation joint term loses by bending hips/ankles 11 deg off the
 reference. That did not move the policy (long9: 11.1 / 10.9 / 11.3 deg
 standing at 0 / 1.8M / 3.6M; the cost was ~1% of the per-step reward), so
-the weight is -20 (0.7/step at 11 deg).
+the weight is -20 (0.7/step at 11 deg). With it, slow backward commands
+stopped working (long12: -0.1 m/s -> 0.00, vs -0.13 without the cost; the
+gait walks back only leaning forward), so the cost is off while the x
+command is below -0.02 m/s.
 
 ## 17. Sim-to-real: smoother actions, wider randomization, slower top speed (2026-11-05, lab PC)
 

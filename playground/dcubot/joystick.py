@@ -701,7 +701,10 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             ),
             "torques": cost_torques(data.actuator_force),
             "action_rate": cost_action_rate(action, info["last_act"]),
-            "orientation": cost_orientation(self.get_gravity(data)),
+            # Off while walking backward: upright, the reference gait stops
+            # walking back slowly (CHANGES #16).
+            "orientation": cost_orientation(self.get_gravity(data))
+            * (info["command"][0] > -0.02),
             "alive": reward_alive(),
             "stand_still": cost_stand_still(
                 info["command"],
