@@ -354,7 +354,9 @@ current Placo sweep; CHANGES #13-#15 get what they can out of it.
 | long7 | long4 12.6M + #13 + reference looked up by achieved speed (CHANGES #15), same ranges | 25.2M | 64-robot env eval (sym-trained): 25.2M `|r-1|` 0.30, fwd/back/left/right/turn_l/turn_r 1.02/1.06/0.55/0.47/0.63/0.66; 18.0M-23.4M 0.31-0.33; ~34% fall in 8 s | forward/back now ~1.0 and turning best so far (0.6), strafe down to ~0.5. Single-run evals swing turning 0-0.5 between checkpoints while the training env's tracking_ang_vel climbs steadily: judge on the 64-robot eval only |
 | long8 | long7 25.2M, wider ranges `--lin_vel_x -0.2 0.3 --lin_vel_y -0.15 0.15 --ang_vel_yaw -0.15 0.15` | 7.2M (stopped) | reward 167 -> 173, ep_len 525 -> 540 | stopped for the upright-torso change |
 | long9 | long8 7.2M + torso orientation cost -5 (CHANGES #16), same ranges as long8 | 3.6M (stopped) | torso pitch standing 11.1 -> 10.9 -> 11.3 deg: no effect | weight too small (~1% of the step reward) |
-| long10 | long9 3.6M + orientation cost -20, same ranges | 25.2M planned | | running |
+| long10 | long9 3.6M + orientation cost -20, same ranges | 25.2M | torso pitch standing 11.3 -> 10.0 (7.2M) -> 9.1 (14.4M) -> 7.9 deg (25.2M); single-run `|r-1|` 0.35 at 7.2M, but backward collapses from 18M (1.34 -> 0.00) and strafe drops to ~0.2 | forcing the hips back in sim stands upright but stops forward walking: the reference gait walks leaning forward. User picked continuing to straighten while walking (from 14.4M) |
+| long11 | long10 14.4M, same config | stopped at start | | replaced by long12 at the user's sim-to-real request |
+| long12 | long10 14.4M + CHANGES #17 (action_rate -1.0, wider randomization, `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15`), orientation -20 | 25.2M planned | | running |
 
 The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
 +-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the

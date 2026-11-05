@@ -272,6 +272,19 @@ reference. That did not move the policy (long9: 11.1 / 10.9 / 11.3 deg
 standing at 0 / 1.8M / 3.6M; the cost was ~1% of the per-step reward), so
 the weight is -20 (0.7/step at 11 deg).
 
+## 17. Sim-to-real: smoother actions, wider randomization, slower top speed (2026-11-05, lab PC)
+
+The user found the gait good but the stride long for the real robot and
+asked for all three of:
+- `action_rate` -0.5 -> -1.0 (smoother joint targets).
+- Wider domain randomization in `randomize.py`: upstream Open Duck's own
+  "was ..." originals (floor friction 0.4-1.0, torso mass +-0.2 kg, qpos0
+  +-0.05 rad, kp 0.8-1.2) plus frictionloss 0.8-1.2, armature 1.0-1.1,
+  link masses 0.85-1.15. Torso CoM jitter stays +-1 cm.
+- Top forward speed back to 0.2 m/s (`--lin_vel_x -0.15 0.2 --lin_vel_y
+  -0.12 0.12`): the reference's gait period is fixed (0.4 s), so stride
+  scales with speed; 0.2 instead of 0.3 m/s is 2/3 the stride.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
