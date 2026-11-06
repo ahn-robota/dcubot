@@ -100,8 +100,21 @@ Open Duck v2 런타임과 같은 번호 체계 (head_roll=33은 디쿠봇에 없
 
 ## 발 스위치 (SS-10)
 
-- 계획: 왼쪽 GPIO22(15번 핀), 오른쪽 GPIO27(13번 핀), COM→GND, NO→GPIO, 내부 pull-up(밟으면 0)
-- 현재 배선 중, **미확인**.
+- 배선 확정: 왼쪽 GPIO22(15번 핀), 오른쪽 GPIO27(13번 핀), COM→GND, NO→GPIO, 내부 pull-up(밟으면 0)
+- **2026-11-07 실측 확인**: `gpiozero`의 `Button(gpio, pull_up=True)`로 양쪽 독립적으로 정상 응답, 크로스톡 없음(한쪽만 밟았을 때 반대쪽은 계속 `False`).
+- `gpiozero`에 핀 드라이버가 하나도 안 깔려 있으면 레거시 sysfs 방식(`NativeFactory`)으로 떨어지는데, 이 OS(Bookworm)에서는 그게 아예 동작하지 않는다(`Button()` 생성 자체가 예외). `RPi.GPIO`는 설치되지만 엣지 감지(`add_event_detect`)가 이 커널에서 실패한다(`RuntimeError: Failed to add edge detection`). **`lgpio`를 설치해야 동작한다** (`hardware/pi/requirements.txt`). `bridge_server.py`/`policy_runner.py`는 이 예외를 잡아서 "foot switches unavailable" 경고를 찍고 항상 "안 밟힘"으로 처리하므로, 로그가 길면 이 경고를 놓치기 쉽다 — 발 접촉이 항상 거짓이면 이 경고부터 확인한다.
+- 직접 확인용 명령:
+  ```bash
+  python3 -c "
+  from gpiozero import Button
+  left = Button(22, pull_up=True)
+  right = Button(27, pull_up=True)
+  import time
+  while True:
+      print('left:', left.is_pressed, 'right:', right.is_pressed)
+      time.sleep(0.3)
+  "
+  ```
 
 ## 설정 값의 단일 소스
 

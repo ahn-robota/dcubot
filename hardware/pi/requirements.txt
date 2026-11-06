@@ -2,3 +2,8 @@
 # Runtime's own install already provides in ~/venv (pypot, rustypot,
 # onnxruntime, adafruit-circuitpython-bno055 -- see docs/HARDWARE_SETUP.md).
 gpiozero
+# gpiozero needs a pin factory; RPi.GPIO installs but its edge detection
+# fails on this Pi OS (Bookworm kernel) with "RuntimeError: Failed to add
+# edge detection". lgpio (the newer /dev/gpiochip*-based driver) works --
+# confirmed on hardware. Both can stay installed; gpiozero prefers lgpio.
+lgpio
