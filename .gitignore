@@ -11,6 +11,7 @@ checkpoints_warmup/
 BEST_WALK_TMP/
 .tmp/
 *.onnx
+!hardware/policies/current.onnx
 *.TXT
 *.log
 *.csv
