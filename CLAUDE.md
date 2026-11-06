@@ -105,5 +105,5 @@ uv run tensorboard --logdir checkpoints/<실험이름>
     - 장기 학습 정책은 좌우 대칭 추론이 필요: `mujoco_infer.py`의 `SymmetricPolicy(pre_tanh=True)`
 - [ ] **다음**:
   1. 실물 로봇 무게중심 확인: 전원을 켜고 관절 0°로 세워 앞으로 쏠리는지, 전체 무게(모델 2.075 kg), 라즈베리파이·전자부품 위치. 모델과 다르면 URDF 질량·무게중심을 고치고 최종 정책에서 이어서 학습
-  2. 실물 실행기(노트북·라즈베리파이)에 위 항목을 반영하고, 최종 정책을 디지털 트윈으로 먼저 확인
+  2. 실물 실행기(노트북·라즈베리파이)에 위 항목을 반영하고 [`docs/SIM2REAL_PLAN.md`](docs/SIM2REAL_PLAN.md) 순서대로 진행 (디지털 트윈 확인 → 매달기 → 받쳐 세우기 → 걷기)
   3. 최종 정책 파일은 git에 없으므로 노트북으로 복사: `scp <실습실PC>:~/dcubot/DCUBOT/rl_training/checkpoints/long14/2026_11_06_000746_7864320.onnx .`
