@@ -16,6 +16,15 @@
 | 서보 어댑터 연결 | Waveshare Bus Servo Adapter (A) ↔ Pi 데이터 USB 포트, OTG 젠더(USB 2.0, 480 Mbps) → `/dev/ttyACM0` |
 | 서보 전원 | 어댑터 DC 플러그(7.4 V). 케이블 연결·분리 시 DC 플러그만 뽑으면 Pi는 켜진 채 유지 |
 
+**알려진 문제 (2026-11-07, 미해결): 토크 ON 직후 USB 연결이 끊겼다가 다른 장치 번호로 재연결됨.** `policy_runner.py`로 실물 토크 ON 테스트 중 `dmesg`에 아래가 찍히고 서보 통신이 영구 `Input/output error`로 멈춤:
+```
+ERROR::handle_hc_chhltd_intr_dma: ... ChHltd set, but reason for halting is unknown ...
+usb 1-1: USB disconnect, device number 2
+... (재연결) ...
+cdc_acm 1-1:1.0: ttyACM1: USB ACM device   # ttyACM0이 아니라 ttyACM1로 재연결됨!
+```
+`dwc_otg`(Pi Zero 2 W의 USB 컨트롤러) DMA 채널 오류 직후 끊기는 패턴 — 토크 ON으로 서보가 전류를 끌어 쓰는 시점과 맞물려서, 전원/케이블 쪽 전기적 문제(전압 흔들림, 케이블 접촉)로 추정되나 아직 확정 못 함. 코드 쪽은 `--device /dev/ttyACM1`(또는 `dmesg`로 확인한 실제 경로)로 바로 재시도 가능하게 고쳐뒀고(`bridge_server.py`/`policy_runner.py`), 통신이 끊기면 전체가 죽지 않고 안전하게 토크 OFF로 멈추는 것까지는 확인됨 — 끊김 자체을 막는 건 아직 못 함. 재발하면: USB 케이블 교체, 전원 공급(UBEC) 용량 확인, Pi와 어댑터 사이에 전원 공급형 USB 허브를 넣어보는 것부터 시도.
+
 ## IMU (BNO055)
 
 - 배선: VIN→1번(3.3V), GND→9번, SDA→3번, SCL→5번

@@ -71,7 +71,7 @@ class PolicyRunner:
         if args.mock:
             self.sensors = MockSensors(self.joint_names)
         else:
-            self.sensors = RealSensors(self.joint_names, self.config, dry_run=args.dry_run)
+            self.sensors = RealSensors(self.joint_names, self.config, dry_run=args.dry_run, device=args.device)
 
         self.joint_limits = load_joint_limits(DCUBOT_MJCF_PATH)
         self.default_actuator = np.array(load_home_ctrl(SCENE_MJCF_PATH))
@@ -327,6 +327,11 @@ def build_arg_parser():
     parser.add_argument(
         "--symmetric_trained", action="store_true",
         help="policy was trained with runner.py --symmetric_policy: rebuild it exactly",
+    )
+    parser.add_argument(
+        "--device", default="/dev/ttyACM0",
+        help="servo bus serial device -- if the USB adapter disconnects/reconnects it can "
+        "come back as ttyACM1 etc.; check `dmesg | tail` and pass the new path here",
     )
     parser.add_argument("--vx", type=float, default=0.0, help="local fallback forward command, m/s")
     parser.add_argument("--vy", type=float, default=0.0, help="local fallback strafe command, m/s")

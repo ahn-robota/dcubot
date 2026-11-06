@@ -83,7 +83,7 @@ class RealSensors:
     it doesn't, swap the reorder in _read_imu().
     """
 
-    def __init__(self, joint_names, config, dry_run=False):
+    def __init__(self, joint_names, config, dry_run=False, device="/dev/ttyACM0"):
         import numpy as np
         import board
         import busio
@@ -119,7 +119,7 @@ class RealSensors:
         q_mount = _mat_to_quat(r_base_chip)
         self.q_chip_base = np.array([q_mount[0], -q_mount[1], -q_mount[2], -q_mount[3]])
 
-        self.servo_io = FeetechSTS3215IO("/dev/ttyACM0")
+        self.servo_io = FeetechSTS3215IO(device)
 
         self._prev_pos = None
         self._prev_t = None

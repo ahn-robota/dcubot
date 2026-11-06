@@ -53,7 +53,7 @@ class Bridge:
         if args.mock:
             self.sensors = MockSensors(self.joint_names)
         else:
-            self.sensors = RealSensors(self.joint_names, self.config, dry_run=args.dry_run)
+            self.sensors = RealSensors(self.joint_names, self.config, dry_run=args.dry_run, device=args.device)
 
         self.joint_limits = load_joint_limits(MJCF_PATH)
 
@@ -239,6 +239,11 @@ def build_arg_parser():
     parser.add_argument(
         "--max-rate-deg", type=float, default=DEFAULT_MAX_RATE_DEG_PER_S,
         help="Command-mode joint-target slew-rate limit, deg/s",
+    )
+    parser.add_argument(
+        "--device", default="/dev/ttyACM0",
+        help="servo bus serial device -- if the USB adapter disconnects/reconnects it can "
+        "come back as ttyACM1 etc.; check `dmesg | tail` and pass the new path here",
     )
     return parser
 
