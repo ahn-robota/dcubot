@@ -12,6 +12,7 @@ from playground.common.onnx_infer import OnnxInfer
 from playground.dcubot.mujoco_infer_base import MJInferBase
 from playground.dcubot.symmetry import mirror_joints, mirror_obs
 from playground.dcubot.joystick import default_config
+from playground.dcubot import policy_constants
 
 USE_MOTOR_SPEED_LIMITS = True
 
@@ -46,8 +47,8 @@ class MjInfer(MJInferBase):
         self.linearVelocityScale = 1.0
         self.angularVelocityScale = 1.0
         self.dof_pos_scale = 1.0
-        self.dof_vel_scale = 0.05
-        self.action_scale = 0.25
+        self.dof_vel_scale = policy_constants.DOF_VEL_SCALE
+        self.action_scale = policy_constants.ACTION_SCALE
 
         self.policy = OnnxInfer(onnx_model_path, awd=True)
         self.watch_dir = None
@@ -79,7 +80,7 @@ class MjInfer(MJInferBase):
 
         self.saved_obs = []
 
-        self.max_motor_velocity = 5.24  # rad/s
+        self.max_motor_velocity = policy_constants.MAX_MOTOR_VELOCITY
 
         self.phase_frequency_factor = 1.0
         # Must match joystick.py: gait clock period and its step counter

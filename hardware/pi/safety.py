@@ -51,6 +51,20 @@ def load_joint_limits(mjcf_path):
     return limits
 
 
+def load_home_ctrl(scene_mjcf_path):
+    """List of 13 floats (radians), in <actuator> declaration order, from
+    the scene MJCF's <key name="home" ctrl="..."/> -- the home-pose target
+    each actuator's position controller holds at rest. Plain ElementTree,
+    no mujoco import needed. Note: this is scene_flat_terrain.xml (which
+    <include>s dcubot.xml and adds the keyframe), not dcubot.xml itself --
+    load_joint_limits() reads the latter, this reads the former."""
+    root = ET.parse(scene_mjcf_path).getroot()
+    for key in root.iter("key"):
+        if key.get("name") == "home":
+            return [float(v) for v in key.get("ctrl").split()]
+    raise ValueError(f"no <key name=\"home\"> in {scene_mjcf_path}")
+
+
 def clamp_and_slew(target, prev_applied, limits, max_rate_deg_per_s, dt):
     """target/prev_applied: {name: radians}. limits: {name: (lo, hi)}
     radians. Returns the value to actually write this frame: clamped to
