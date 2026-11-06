@@ -61,6 +61,18 @@ CMD_TIMEOUT_S = 1.0
 # torque off.
 COMMS_ERROR_LIMIT = 3
 
+# Right when torque turns on, the policy can command all 13 joints toward
+# its standing pose at once, at training's full rate (MAX_MOTOR_VELOCITY,
+# ~300 deg/s) -- a real hardware test saw a USB+I2C comms glitch exactly
+# at that moment (see docs/HARDWARE_SETUP.md's "알려진 문제" entry); a
+# brief, large simultaneous current draw is the suspected cause (confirmed
+# NOT an undervoltage event via vcgencmd, so likely a short current/noise
+# transient too brief for that to catch). For this long after torque
+# turns on, slew is capped at the gentler rate below instead of training's
+# full rate -- steady-state control fidelity is unaffected once it elapses.
+SOFT_START_DURATION_S = 0.5
+SOFT_START_MAX_VELOCITY_DEG = 60.0  # matches Command mode's own default (--max-rate-deg)
+
 
 class PolicyRunner:
     def __init__(self, args):
@@ -100,10 +112,12 @@ class PolicyRunner:
         self._loop_hz = 0.0
         self._consecutive_errors = 0
         self._last_error_print_t = 0.0
+        self._soft_start_until = 0.0
 
     def _reset_history(self):
         """Fresh start whenever torque newly turns on, so the first frame
         doesn't feed a stale pre-disable action history into the policy."""
+        self._soft_start_until = time.time() + SOFT_START_DURATION_S
         self.last_action = np.zeros(13)
         self.last_last_action = np.zeros(13)
         self.last_last_last_action = np.zeros(13)
@@ -242,7 +256,11 @@ class PolicyRunner:
                 self.last_last_action = self.last_action.copy()
                 self.last_action = np.array(action).copy()
 
-                max_step = policy_constants.MAX_MOTOR_VELOCITY * policy_constants.CONTROL_DT
+                if time.time() < self._soft_start_until:
+                    max_velocity = math.radians(SOFT_START_MAX_VELOCITY_DEG)
+                else:
+                    max_velocity = policy_constants.MAX_MOTOR_VELOCITY
+                max_step = max_velocity * policy_constants.CONTROL_DT
                 motor_targets = self.default_actuator + self.last_action * policy_constants.ACTION_SCALE
                 motor_targets = np.clip(
                     motor_targets, self.prev_motor_targets - max_step, self.prev_motor_targets + max_step
