@@ -75,14 +75,20 @@ def make_telemetry(
     return msg
 
 
-def make_command(seq, t_pc, torque_request, estop, joint_target):
-    return {
+def make_command(seq, t_pc, torque_request, estop, joint_target, velocity_command=None):
+    msg = {
         "seq": seq,
         "t_pc": t_pc,
         "torque_request": bool(torque_request),
         "estop": bool(estop),
         "joint_target": dict(joint_target),
     }
+    if velocity_command is not None:
+        # [vx, vy, wz], m/s and rad/s -- hardware/pi/policy_runner.py's
+        # autonomous walker only (bridge_server.py's Command mode ignores
+        # it). See docs/SIM_TO_REAL.md.
+        msg["velocity_command"] = list(velocity_command)
+    return msg
 
 
 class SeqLossTracker:
