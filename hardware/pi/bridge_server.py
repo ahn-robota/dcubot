@@ -19,12 +19,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hw_config import load as load_hw_config, servo_ids  # noqa: E402
 from protocol import (  # noqa: E402
     DEFAULT_PORT,
+    FAULT_COMMS_ERROR,
     FAULT_TIMEOUT_S,
     make_telemetry,
     pack,
     unpack,
 )
 from safety import TorqueGate, clamp_and_slew, load_joint_limits  # noqa: E402
+
+# A transient servo-bus hiccup (DxlTimeoutError etc.) shouldn't crash the
+# whole bridge and leave torque on with nothing updating it. One or two in
+# a row are tolerated (that tick is just skipped); this many in a row
+# force torque off. See hardware/pi/policy_runner.py's identical guard.
+COMMS_ERROR_LIMIT = 3
 from sensors import (  # noqa: E402
     MockSensors,
     RealSensors,
@@ -63,6 +70,7 @@ class Bridge:
 
         self._seq = 0
         self.gate = TorqueGate()
+        self._consecutive_errors = 0
         self._last_applied = {}  # {name: rad} -- slew-rate baseline while torque is on
 
     def _recv_loop(self):
@@ -115,6 +123,18 @@ class Bridge:
             self._last_applied = target
             self.sensors.write_targets(target)
 
+    def _on_comms_error(self, e):
+        self._consecutive_errors += 1
+        print(f"bridge: servo comms error ({e}) -- {self._consecutive_errors} in a row")
+        if self._consecutive_errors >= COMMS_ERROR_LIMIT:
+            print("bridge: too many comms errors in a row -- forcing torque OFF")
+            try:
+                self.sensors.disable_torque()
+            except Exception as e2:
+                print(f"bridge: disable_torque also failed ({e2})")
+            self.gate.enabled = False
+            self.gate.fault = FAULT_COMMS_ERROR
+
     def run(self):
         Thread(target=self._recv_loop, daemon=True).start()
         mode = "mock" if self.args.mock else "real"
@@ -136,7 +156,12 @@ class Bridge:
             loop_hz = 1.0 / mean_dt if mean_dt > 0 else 0.0  # dt==0 is possible on the very first tick
 
             read_start = time.time()
-            quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms = self.sensors.read()
+            try:
+                quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms = self.sensors.read()
+            except Exception as e:
+                self._on_comms_error(e)
+                time.sleep(max(0.0, period - (time.time() - loop_start)))
+                continue
             if servo_read_ms is None:
                 servo_read_ms = (time.time() - read_start) * 1000.0
 
@@ -147,7 +172,13 @@ class Bridge:
                 max_cmd_seq_recv = self._max_cmd_seq_recv
                 client_addr = self._client_addr
 
-            self._update_torque(last_cmd, dt if dt > 0 else period)
+            try:
+                self._update_torque(last_cmd, dt if dt > 0 else period)
+            except Exception as e:
+                self._on_comms_error(e)
+                time.sleep(max(0.0, period - (time.time() - loop_start)))
+                continue
+            self._consecutive_errors = 0
 
             # How long we've been sitting on the command we're about to
             # echo -- the viewer subtracts this from its RTT measurement.

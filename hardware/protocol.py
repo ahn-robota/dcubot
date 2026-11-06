@@ -15,6 +15,7 @@ FAULT_TIMEOUT_S = 0.3
 FAULT_TIMEOUT = "timeout"
 FAULT_ESTOP = "estop"
 FAULT_ZERO_OFFSET = "zero_offset_exceeded"
+FAULT_COMMS_ERROR = "comms_error"  # servo bus (pypot/DxlTimeoutError etc.), not the network link
 
 
 def pack(msg: dict) -> bytes:

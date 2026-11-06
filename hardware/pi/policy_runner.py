@@ -32,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hw_config import load as load_hw_config  # noqa: E402
-from protocol import DEFAULT_PORT, make_telemetry, pack, unpack  # noqa: E402
+from protocol import DEFAULT_PORT, FAULT_COMMS_ERROR, make_telemetry, pack, unpack  # noqa: E402
 from safety import TorqueGate, load_home_ctrl, load_joint_limits  # noqa: E402
 from sensors import MockSensors, RealSensors  # noqa: E402
 
@@ -53,6 +53,13 @@ CONTROL_HZ = 1.0 / policy_constants.CONTROL_DT
 # while it's standing unsupported is more dangerous than just standing
 # still -- see docs/SIM_TO_REAL.md section 5 (confirmed with the user).
 CMD_TIMEOUT_S = 1.0
+
+# A transient servo-bus hiccup (DxlTimeoutError etc.) shouldn't crash the
+# whole control loop and leave torque on with nothing updating it -- that's
+# worse than a clean shutdown. One or two in a row are tolerated (that tick
+# is just skipped, servos hold their last goal); this many in a row force
+# torque off.
+COMMS_ERROR_LIMIT = 3
 
 
 class PolicyRunner:
@@ -91,6 +98,7 @@ class PolicyRunner:
 
         self.velocity_command = [args.vx, args.vy, args.wz]
         self._loop_hz = 0.0
+        self._consecutive_errors = 0
 
     def _reset_history(self):
         """Fresh start whenever torque newly turns on, so the first frame
@@ -159,8 +167,30 @@ class PolicyRunner:
         # section 3 ("처음엔 머리 3개는 0 고정").
         return [vx, vy, wz, 0.0, 0.0, 0.0]
 
+    def _on_comms_error(self, e):
+        """A transient servo-bus error (DxlTimeoutError etc.) must not
+        crash the control loop -- that would leave torque on with nothing
+        updating it, worse than a clean shutdown. Tolerate a few in a row
+        (this tick is just skipped; servos hold their last goal); force
+        torque off on sustained failure."""
+        self._consecutive_errors += 1
+        print(f"policy_runner: servo comms error ({e}) -- {self._consecutive_errors} in a row")
+        if self._consecutive_errors >= COMMS_ERROR_LIMIT:
+            print("policy_runner: too many comms errors in a row -- forcing torque OFF")
+            try:
+                self.sensors.disable_torque()
+            except Exception as e2:
+                print(f"policy_runner: disable_torque also failed ({e2})")
+            self.gate.enabled = False
+            self.gate.fault = FAULT_COMMS_ERROR
+
     def _step(self):
-        quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms = self.sensors.read()
+        try:
+            quat, gyro, accel, joint_pos, joint_vel, foot_contact, servo_read_ms = self.sensors.read()
+        except Exception as e:
+            self._on_comms_error(e)
+            return
+        self._consecutive_errors = 0
 
         with self._lock:
             last_cmd = self._last_cmd
@@ -184,31 +214,36 @@ class PolicyRunner:
             # Decay the command, NOT the torque -- see CMD_TIMEOUT_S above.
             self.velocity_command = [0.0, 0.0, 0.0]
 
-        # watchdog_timed_out=False always: a comms timeout never faults
-        # torque here (only e-stop does), unlike bridge_server.py's Bridge.
-        start_rad = self.gate.update(request, estop_now, False, self.sensors)
-        if start_rad is not None:
-            self._reset_history()
-            print("policy_runner: torque ON")
+        try:
+            # watchdog_timed_out=False always: a comms timeout never faults
+            # torque here (only e-stop does), unlike bridge_server.py's Bridge.
+            start_rad = self.gate.update(request, estop_now, False, self.sensors)
+            if start_rad is not None:
+                self._reset_history()
+                print("policy_runner: torque ON")
 
-        if self.gate.enabled:
-            command = self._policy_command()
-            obs = self._build_obs(gyro, accel, joint_pos, joint_vel, foot_contact, command)
-            action = self.policy.infer(obs)
+            if self.gate.enabled:
+                command = self._policy_command()
+                obs = self._build_obs(gyro, accel, joint_pos, joint_vel, foot_contact, command)
+                action = self.policy.infer(obs)
 
-            self.last_last_last_action = self.last_last_action.copy()
-            self.last_last_action = self.last_action.copy()
-            self.last_action = np.array(action).copy()
+                self.last_last_last_action = self.last_last_action.copy()
+                self.last_last_action = self.last_action.copy()
+                self.last_action = np.array(action).copy()
 
-            max_step = policy_constants.MAX_MOTOR_VELOCITY * policy_constants.CONTROL_DT
-            motor_targets = self.default_actuator + self.last_action * policy_constants.ACTION_SCALE
-            motor_targets = np.clip(
-                motor_targets, self.prev_motor_targets - max_step, self.prev_motor_targets + max_step
-            )
-            self.motor_targets = motor_targets
-            self.prev_motor_targets = motor_targets.copy()
+                max_step = policy_constants.MAX_MOTOR_VELOCITY * policy_constants.CONTROL_DT
+                motor_targets = self.default_actuator + self.last_action * policy_constants.ACTION_SCALE
+                motor_targets = np.clip(
+                    motor_targets, self.prev_motor_targets - max_step, self.prev_motor_targets + max_step
+                )
+                self.motor_targets = motor_targets
+                self.prev_motor_targets = motor_targets.copy()
 
-            self.sensors.write_targets(dict(zip(self.joint_names, motor_targets.tolist())))
+                self.sensors.write_targets(dict(zip(self.joint_names, motor_targets.tolist())))
+        except Exception as e:
+            self._on_comms_error(e)
+            return
+        self._consecutive_errors = 0
 
         hold_ms = (time.time() - last_cmd_recv_t) * 1000.0 if last_cmd_recv_t is not None else None
         self._seq += 1
