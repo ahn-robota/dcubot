@@ -23,20 +23,36 @@ def check_near_zero(positions_deg, limit_deg=ZERO_OFFSET_LIMIT_DEG):
     return {i: p for i, p in positions_deg.items() if abs(p) > limit_deg}
 
 
-def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG):
+TORQUE_ENABLE_STAGGER_S = 0.01
+
+
+def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger_s=TORQUE_ENABLE_STAGGER_S):
     """Reads current position, refuses if any joint is too far from zero,
     otherwise sets the goal to the current position (so torque doesn't
-    yank the servo toward some stale registered goal) and enables torque.
+    yank the servo toward some stale registered goal) and enables torque
+    ONE SERVO AT A TIME, `stagger_s` apart -- not all 13 simultaneously.
+
+    Real hardware repeatedly showed a USB+I2C comms glitch within one
+    control tick of torque turning on (see docs/HARDWARE_SETUP.md's
+    "알려진 문제" entry); slewing the commanded *target* more gently
+    (an earlier attempt) didn't help, which points at 13 servos all
+    drawing their position-hold current at the exact same instant, not
+    at how fast they're asked to move. Staggering by ~13*stagger_s total
+    (0.13s at the default) spreads that current draw over time instead.
 
     Returns {id: current_deg} on success. Raises RuntimeError with the
     offending {id: deg} on failure -- nothing is enabled in that case.
     """
+    import time
+
     positions = dict(zip(ids, servo_io.get_present_position(ids)))
     bad = check_near_zero(positions, limit_deg)
     if bad:
         raise RuntimeError(f"zero_offset_exceeded: {bad}")
     servo_io.set_goal_position(positions)
-    servo_io.enable_torque(ids)
+    for id_ in ids:
+        servo_io.enable_torque([id_])
+        time.sleep(stagger_s)
     return positions
 
 
