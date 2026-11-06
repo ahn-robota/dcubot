@@ -7,7 +7,12 @@ torque handling, so this isn't implemented twice.
 Also has the MJCF joint-limit loader and the per-frame clamp+slew-rate
 limiter used while torque is on. See docs/DIGITAL_TWIN.md.
 """
+import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from protocol import FAULT_ESTOP, FAULT_TIMEOUT, FAULT_ZERO_OFFSET  # noqa: E402
 
 ZERO_OFFSET_LIMIT_DEG = 15.0
 
@@ -63,6 +68,78 @@ def load_home_ctrl(scene_mjcf_path):
         if key.get("name") == "home":
             return [float(v) for v in key.get("ctrl").split()]
     raise ValueError(f"no <key name=\"home\"> in {scene_mjcf_path}")
+
+
+class TorqueGate:
+    """The torque on/off/e-stop/fault state machine, shared by
+    bridge_server.py's Command mode and hardware/pi/policy_runner.py so
+    this isn't reimplemented a second time -- it's subtler than it looks
+    (see git history: a stale repeated torque_request was once treated as
+    a fresh "retry" every tick, defeating the watchdog; e-stop could be
+    bypassed by also requesting torque in the same packet; and e-stop
+    release needs to arm the edge-detector since torque_request commonly
+    never actually drops to False while e-stop is asserted).
+
+    `sensors` needs .enable_torque() -> (ok, info, start_positions_rad)
+    and .disable_torque() (hardware/pi/sensors.py's MockSensors/
+    RealSensors both provide these).
+    """
+
+    def __init__(self):
+        self.enabled = False
+        self.fault = None
+        self._prev_request = False
+
+    def update(self, request, estop_now, watchdog_timed_out, sensors):
+        """Call once per control loop tick. Returns the positions (rad) to
+        seed a slew-rate baseline from, on the frame torque actually turns
+        on; None otherwise."""
+        request = bool(request)
+
+        if estop_now:
+            # Absolute override: can't be bypassed by also requesting
+            # torque in the same packet. Also forces the edge-detector's
+            # baseline to False, so the first request==True sample seen
+            # once estop releases counts as fresh (torque_request commonly
+            # stays True continuously through an e-stop -- it's a separate
+            # flag -- so without this there'd never be a false->true edge
+            # to clear the fault on).
+            self.fault = FAULT_ESTOP
+            self._prev_request = False
+            if self.enabled:
+                sensors.disable_torque()
+                self.enabled = False
+            return None
+
+        if watchdog_timed_out:
+            self.fault = FAULT_TIMEOUT
+
+        # Edge, not level: a stale repeated request (e.g. nothing new
+        # arriving during a timeout) must not keep re-clearing the fault.
+        fresh_request = request and not self._prev_request
+        self._prev_request = request
+
+        if self.fault is not None:
+            if fresh_request:
+                self.fault = None  # explicit retry
+            elif self.enabled:
+                sensors.disable_torque()
+                self.enabled = False
+                return None
+            else:
+                return None
+
+        if request and not self.enabled:
+            ok, info, start_rad = sensors.enable_torque()
+            if ok:
+                self.enabled = True
+                return start_rad
+            self.fault = FAULT_ZERO_OFFSET
+            return None
+        if not request and self.enabled:
+            sensors.disable_torque()
+            self.enabled = False
+        return None
 
 
 def clamp_and_slew(target, prev_applied, limits, max_rate_deg_per_s, dt):

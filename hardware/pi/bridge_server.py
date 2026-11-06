@@ -19,15 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hw_config import load as load_hw_config, servo_ids  # noqa: E402
 from protocol import (  # noqa: E402
     DEFAULT_PORT,
-    FAULT_ESTOP,
-    FAULT_TIMEOUT,
     FAULT_TIMEOUT_S,
-    FAULT_ZERO_OFFSET,
     make_telemetry,
     pack,
     unpack,
 )
-from safety import clamp_and_slew, load_joint_limits  # noqa: E402
+from safety import TorqueGate, clamp_and_slew, load_joint_limits  # noqa: E402
 from sensors import (  # noqa: E402
     MockSensors,
     RealSensors,
@@ -65,10 +62,8 @@ class Bridge:
         self._client_addr = None
 
         self._seq = 0
-        self.fault = None
-        self.torque_enabled = False
+        self.gate = TorqueGate()
         self._last_applied = {}  # {name: rad} -- slew-rate baseline while torque is on
-        self._prev_torque_request = False  # edge-detect, not level-detect (see _update_torque)
 
     def _recv_loop(self):
         while True:
@@ -91,86 +86,25 @@ class Bridge:
                 if seq is not None and (self._max_cmd_seq_recv is None or seq > self._max_cmd_seq_recv):
                     self._max_cmd_seq_recv = seq
 
-    def _check_watchdog(self):
-        """Only sets self.fault -- _update_torque() is what actually acts
-        on it (disabling torque, latching). Keeping the two separate is
-        what makes a fault "sticky": once set, nothing here clears it."""
+    def _watchdog_timed_out(self):
         with self._lock:
             last_recv_t = self._last_cmd_recv_t
-            last_cmd = self._last_cmd
-        now = time.time()
-        if last_cmd is not None and last_cmd.get("estop"):
-            self.fault = FAULT_ESTOP
-        elif last_recv_t is not None and now - last_recv_t > FAULT_TIMEOUT_S:
-            self.fault = FAULT_TIMEOUT
+        return last_recv_t is not None and time.time() - last_recv_t > FAULT_TIMEOUT_S
 
     def _update_torque(self, last_cmd, dt):
-        """The whole torque state machine in one place: a latched fault
-        forces torque off and stays off until the viewer explicitly
-        requests torque again (no auto re-arm on reconnect -- see
-        docs/DIGITAL_TWIN.md step 4); otherwise torque_request's rising/
-        falling edge drives enable/disable, and while on, the commanded
-        joint_target is clamped to the MJCF's own joint range and
-        slew-rate-limited from whatever was actually applied last frame
-        before being written to the servos."""
+        """Drives hardware/pi/safety.py's shared TorqueGate, then (only
+        while it's enabled) clamps the commanded joint_target to the
+        MJCF's own joint range and slew-rate-limits it from whatever was
+        actually applied last frame before writing it to the servos."""
         request = bool(last_cmd.get("torque_request")) if last_cmd else False
         estop_now = bool(last_cmd.get("estop")) if last_cmd else False
 
-        if estop_now:
-            # Absolute override: can't be bypassed by also requesting
-            # torque in the same packet (self.fault is already set to
-            # FAULT_ESTOP by _check_watchdog for as long as this holds).
-            # Also force the edge-detector's baseline to False: torque_
-            # request commonly stays True continuously through an e-stop
-            # (it's a separate flag), so without this there's never a
-            # false->true EDGE on it after estop releases, and a fault
-            # that should have cleared on retry never does -- the first
-            # request==True sample seen once estop_now goes back to False
-            # needs to read as fresh.
-            self._prev_torque_request = False
-            if self.torque_enabled:
-                self.sensors.disable_torque()
-                self.torque_enabled = False
-            return
+        start_rad = self.gate.update(request, estop_now, self._watchdog_timed_out(), self.sensors)
+        if start_rad is not None:
+            self._last_applied = start_rad
+            print("bridge: torque ON")
 
-        # Edge, not level: during a comms timeout, self._last_cmd is a
-        # STALE packet that never gets replaced (nothing new is arriving),
-        # so its torque_request can sit at True indefinitely. Treating
-        # that as a fresh "re-request" cleared the fault every single
-        # loop tick, right back to enabled, the instant the timeout set
-        # it -- the watchdog never had a visible effect. A real re-request
-        # is a False->True transition.
-        fresh_request = request and not self._prev_torque_request
-        self._prev_torque_request = request
-
-        if self.fault is not None:
-            if fresh_request:
-                # The user pressed the retry/torque button again -- try
-                # again below instead of just sitting stuck forever.
-                self.fault = None
-            elif self.torque_enabled:
-                self.sensors.disable_torque()
-                self.torque_enabled = False
-                return
-            else:
-                return
-
-        if request and not self.torque_enabled:
-            ok, info, start_rad = self.sensors.enable_torque()
-            if ok:
-                self.torque_enabled = True
-                self._last_applied = start_rad
-                print(f"bridge: torque ON ({info})")
-            else:
-                self.fault = FAULT_ZERO_OFFSET
-                print(f"bridge: torque-on REJECTED ({info})")
-                return
-        elif not request and self.torque_enabled:
-            self.sensors.disable_torque()
-            self.torque_enabled = False
-            print("bridge: torque OFF (requested)")
-
-        if self.torque_enabled and last_cmd:
+        if self.gate.enabled and last_cmd:
             target = clamp_and_slew(
                 last_cmd.get("joint_target") or {},
                 self._last_applied,
@@ -206,8 +140,6 @@ class Bridge:
             if servo_read_ms is None:
                 servo_read_ms = (time.time() - read_start) * 1000.0
 
-            self._check_watchdog()
-
             with self._lock:
                 last_cmd = self._last_cmd
                 last_cmd_seq = self._last_cmd_seq
@@ -233,8 +165,8 @@ class Bridge:
                 joint_pos=joint_pos,
                 joint_vel=joint_vel,
                 foot_contact=foot_contact,
-                torque_enabled=self.torque_enabled,
-                fault=self.fault,
+                torque_enabled=self.gate.enabled,
+                fault=self.gate.fault,
                 echo_cmd_seq=last_cmd_seq,
                 echo_cmd_t_pc=(last_cmd or {}).get("t_pc"),
                 last_cmd_seq_recv=max_cmd_seq_recv,
@@ -249,7 +181,7 @@ class Bridge:
                 cal = self.sensors.calibration_status()
                 cal_str = f" cal(sys/gyro/accel/mag)={cal}" if cal is not None else ""
                 print(
-                    f"loop_hz={loop_hz:.1f} servo_read_ms={servo_read_ms:.2f} fault={self.fault} | "
+                    f"loop_hz={loop_hz:.1f} servo_read_ms={servo_read_ms:.2f} fault={self.gate.fault} | "
                     f"roll/pitch from quat=({roll_q:+.1f},{pitch_q:+.1f}) "
                     f"from gravity=({roll_g:+.1f},{pitch_g:+.1f}) deg "
                     f"gravity_base={[round(a, 2) for a in accel]}{cal_str}"
