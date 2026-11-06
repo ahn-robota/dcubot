@@ -96,6 +96,14 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 64대 학습환경 평가(넓힌 랜덤화·밀기 포함): 여섯 방향 명령의 0.76~0.98배, `|r-1|` 0.11 (`nm5`는 0.29). 몸통 앞 기울기 약 8° (`nm5` 약 11°). 밀기를 받으면 8초 안에 약 33% 넘어짐(변화 없음)
   - 원본과 달라진 점: `CHANGES_FROM_ORIGINAL.md` #12~#17 (회전 보상 저역통과, 레퍼런스를 실제 속도로 조회·보간, 몸통 기울기 벌점(후진 중 제외), action_rate -1.0, 랜덤화 확대, 최고 속도 0.2 m/s)
   - 레퍼런스 모션은 재생성하지 않기로 함(사용자 결정): 옆걸음과 회전(최대 0.11 rad/s)은 Placo 기준 동작의 한계에 묶여 있음
+- [x] **실기 하드웨어 (노트북, 2026-11-04~05, 브랜치 `hardware/bringup`, master에 아직 병합 안 됨)**: 라즈베리파이 Zero 2 W, 서보 13개 ID·0점·방향, IMU(BNO055) 장착 방향, 디지털 트윈 도구. 자세한 내용은 그 브랜치의 `docs/HARDWARE_SETUP.md`, `docs/DIGITAL_TWIN.md`, 값은 `hardware/dcubot_hw_config.json`
+  - 정책을 실물에서 돌릴 때 학습 쪽과 맞춰야 할 것:
+    - 제어 주기 50 Hz(`ctrl_dt` 0.02), 목표각 = 기본자세 + 행동 × 0.25 rad, 목표각 변화는 5.24 rad/s로 제한
+    - 관측(94)에 발 접촉 2개가 들어감 → 발 스위치가 필요함(브랜치 기준 배선 미확인)
+    - 서보 3개 부호 반전(left_hip_yaw, left_hip_roll, head_yaw)과 IMU 축 변환은 실기 런타임에서만 함. 시뮬레이션·정책은 그대로
+    - 서보 레지스터 P 32 = 시뮬레이션 kp 17.8의 근거(BAM 실측, Open Duck과 같은 설정)
+    - 장기 학습 정책은 좌우 대칭 추론이 필요: `mujoco_infer.py`의 `SymmetricPolicy(pre_tanh=True)`
 - [ ] **다음**:
   1. 실물 로봇 무게중심 확인: 전원을 켜고 관절 0°로 세워 앞으로 쏠리는지, 전체 무게(모델 2.075 kg), 라즈베리파이·전자부품 위치. 모델과 다르면 URDF 질량·무게중심을 고치고 최종 정책에서 이어서 학습
-  2. 실물 실행기에 `--symmetric_trained`와 같은 좌우 대칭 추론(`mujoco_infer.py`의 `SymmetricPolicy(pre_tanh=True)`)을 넣기
+  2. 실물 실행기(노트북·라즈베리파이)에 위 항목을 반영하고, 최종 정책을 디지털 트윈으로 먼저 확인
+  3. 최종 정책 파일은 git에 없으므로 노트북으로 복사: `scp <실습실PC>:~/dcubot/DCUBOT/rl_training/checkpoints/long14/2026_11_06_000746_7864320.onnx .`
