@@ -91,7 +91,17 @@ uv run tensorboard --logdir checkpoints/<실험이름>
   - 전체 CoM 이동 3.52mm (X −3.34, Y ~0, Z −1.13) — 5mm 미만 기준으로는 재생성 불필요했지만, 사용자가 Placo에서 회전 동작을 새 머리 모델로 직접 보고 싶다고 해서 **레퍼런스 모션도 재생성함**: `polynomial_coefficients_omnidirectional_headv2_deg9.pkl` (격자·설정은 기존과 동일, degree=9, 0% 깨짐 확인). `joystick.py`가 이걸 가리킴
   - kp=17.8/forcerange=3.35, IMU·발 site, home 높이 전부 변화 없음 확인
   - 자세한 내용: [`docs/CHANGES_FROM_ORIGINAL.md`](docs/CHANGES_FROM_ORIGINAL.md) "Head v2"
-- [ ] **다음 (실습실 PC가 할 일)**:
+- [x] **실기 하드웨어 셋업 + 디지털 트윈 도구 (노트북, 2026-11-04~07, 브랜치 `hardware/bringup`)**: 라즈베리파이 서보/IMU/발 스위치 셋업, 조종/관찰용 디지털 트윈(`hardware/pi/bridge_server.py`+`hardware/pc/twin_viewer.py`, Mirror+Command 모드), 자율 추론 러너(`hardware/pi/policy_runner.py`) 뼈대까지 완료. 자세한 내용: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md), [`docs/DIGITAL_TWIN.md`](docs/DIGITAL_TWIN.md), [`docs/SIM_TO_REAL.md`](docs/SIM_TO_REAL.md)
+  - **실습실 PC가 할 일 (이번에 추가)**: `hardware/pi/policy_runner.py`로 실기 테스트할 정책 하나를 `hardware/policies/current.onnx`로 push해줘 ([`hardware/policies/README.md`](hardware/policies/README.md) 참고). 지금 쓸 건 아래 `nm5` 체크포인트(또는 그 뒤로 더 좋은 게 나왔으면 그걸로):
+    ```bash
+    cd ~/dcubot/DCUBOT/rl_training
+    cp checkpoints/nm5/2026_11_03_090557_3604480.onnx hardware/policies/current.onnx
+    git add hardware/policies/current.onnx
+    git commit -m "deploy: nm5/2026_11_03_090557_3604480 as current.onnx"
+    git push
+    ```
+    push하면 라즈베리파이·노트북은 `git pull`로 받아서 실물 테스트 진행함. `checkpoints/`는 그대로 git에 안 올림 — `hardware/policies/current.onnx` 하나만 별도로 추적.
+- [ ] **다음 (실습실 PC가 할 일, 학습 이어가기)**:
   1. `git pull`, `uv sync`, 스모크 테스트 (obs `(94,)`, action `13`)
   2. 기존 최종 정책(`nm5` 3.6M, `checkpoints/nm5/2026_11_03_090557_3604480.onnx`)을 **새 머리 모델 + 새 레퍼런스 모션**으로 평가해서 변화로 못 걷게 됐는지 확인:
      ```bash

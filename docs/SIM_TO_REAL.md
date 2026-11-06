@@ -88,6 +88,7 @@ prev_motor_targets = motor_targets.copy()
 | `playground/dcubot/policy_constants.py` | action_scale, dof_vel_scale, gait_period, max_motor_velocity, control_dt, 커맨드 범위, 액추에이터 순서 — 숫자만, jax/mujoco 없음 |
 | `playground/dcubot/mujoco_infer.py` | (리팩터) 하드코딩된 상수를 `policy_constants.py` 참조로 교체 (동작은 동일) |
 | `hardware/pi/requirements.txt` | 변화 없음 예상 (onnxruntime·numpy 이미 있음) |
+| `hardware/policies/current.onnx` | 실기에 지금 배포하는 정책 하나(`checkpoints/`와 별개로 git에 올림) — [`hardware/policies/README.md`](../hardware/policies/README.md) |
 
 ## 7. 테스트 순서 (기존 디지털 트윈과 같은 리듬)
 
