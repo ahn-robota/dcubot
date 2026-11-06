@@ -10,30 +10,11 @@ import os
 from playground.common.onnx_infer import OnnxInfer
 
 from playground.dcubot.mujoco_infer_base import MJInferBase
-from playground.dcubot.symmetry import mirror_joints, mirror_obs
+from playground.dcubot.symmetry import SymmetricPolicy
 from playground.dcubot.joystick import default_config
 from playground.dcubot import policy_constants
 
 USE_MOTOR_SPEED_LIMITS = True
-
-class SymmetricPolicy:
-    """Average the policy with its own mirror image, a = (pi(o) + M pi(M o)) / 2:
-    exactly left/right symmetric. pre_tanh=True averages the pre-tanh means
-    instead of the actions, which reproduces a policy trained with
-    runner.py --symmetric_policy exactly (the ONNX holds f; the trained
-    policy is tanh((f(o) + M f(M o)) / 2))."""
-
-    def __init__(self, policy, pre_tanh=False):
-        self.policy = policy
-        self.pre_tanh = pre_tanh
-
-    def infer(self, obs):
-        a = self.policy.infer(obs)
-        a_m = mirror_joints(self.policy.infer(mirror_obs(obs)))
-        if self.pre_tanh:
-            atanh = lambda x: np.arctanh(np.clip(x, -0.999999, 0.999999))
-            return np.tanh(0.5 * (atanh(a) + atanh(a_m)))
-        return 0.5 * (a + a_m)
 
 
 class MjInfer(MJInferBase):
