@@ -99,6 +99,7 @@ class PolicyRunner:
         self.velocity_command = [args.vx, args.vy, args.wz]
         self._loop_hz = 0.0
         self._consecutive_errors = 0
+        self._last_error_print_t = 0.0
 
     def _reset_history(self):
         """Fresh start whenever torque newly turns on, so the first frame
@@ -172,15 +173,25 @@ class PolicyRunner:
         crash the control loop -- that would leave torque on with nothing
         updating it, worse than a clean shutdown. Tolerate a few in a row
         (this tick is just skipped; servos hold their last goal); force
-        torque off on sustained failure."""
+        torque off on sustained failure.
+
+        A sustained failure (port/USB actually down, not just one slow
+        servo) means every further read/write keeps failing too -- so this
+        prints at most once/second (not once per 20ms tick) and attempts
+        disable_torque exactly once (== not >=), not forever on a dead
+        port."""
         self._consecutive_errors += 1
-        print(f"policy_runner: servo comms error ({e}) -- {self._consecutive_errors} in a row")
-        if self._consecutive_errors >= COMMS_ERROR_LIMIT:
+        now = time.time()
+        if now - self._last_error_print_t > 1.0:
+            print(f"policy_runner: servo comms error ({e}) -- {self._consecutive_errors} in a row")
+            self._last_error_print_t = now
+        if self._consecutive_errors == COMMS_ERROR_LIMIT:
             print("policy_runner: too many comms errors in a row -- forcing torque OFF")
             try:
                 self.sensors.disable_torque()
             except Exception as e2:
-                print(f"policy_runner: disable_torque also failed ({e2})")
+                print(f"policy_runner: disable_torque also failed ({e2}) -- "
+                      "bus looks down, not retrying every tick")
             self.gate.enabled = False
             self.gate.fault = FAULT_COMMS_ERROR
 

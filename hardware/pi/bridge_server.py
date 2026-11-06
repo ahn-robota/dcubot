@@ -71,6 +71,7 @@ class Bridge:
         self._seq = 0
         self.gate = TorqueGate()
         self._consecutive_errors = 0
+        self._last_error_print_t = 0.0
         self._last_applied = {}  # {name: rad} -- slew-rate baseline while torque is on
 
     def _recv_loop(self):
@@ -124,14 +125,22 @@ class Bridge:
             self.sensors.write_targets(target)
 
     def _on_comms_error(self, e):
+        """See hardware/pi/policy_runner.py's identical method: a
+        sustained failure (port/USB actually down) means every further
+        read/write keeps failing too, so this prints at most once/second
+        and attempts disable_torque exactly once (== not >=), not forever
+        on a dead port."""
         self._consecutive_errors += 1
-        print(f"bridge: servo comms error ({e}) -- {self._consecutive_errors} in a row")
-        if self._consecutive_errors >= COMMS_ERROR_LIMIT:
+        now = time.time()
+        if now - self._last_error_print_t > 1.0:
+            print(f"bridge: servo comms error ({e}) -- {self._consecutive_errors} in a row")
+            self._last_error_print_t = now
+        if self._consecutive_errors == COMMS_ERROR_LIMIT:
             print("bridge: too many comms errors in a row -- forcing torque OFF")
             try:
                 self.sensors.disable_torque()
             except Exception as e2:
-                print(f"bridge: disable_torque also failed ({e2})")
+                print(f"bridge: disable_torque also failed ({e2}) -- bus looks down, not retrying every tick")
             self.gate.enabled = False
             self.gate.fault = FAULT_COMMS_ERROR
 
