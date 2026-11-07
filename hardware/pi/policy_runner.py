@@ -88,10 +88,12 @@ class PolicyRunner:
         self.joint_limits = load_joint_limits(DCUBOT_MJCF_PATH)
         self.default_actuator = np.array(load_home_ctrl(SCENE_MJCF_PATH))
 
-        policy = OnnxInfer(args.onnx, awd=True)
-        if args.symmetric or args.symmetric_trained:
-            policy = SymmetricPolicy(policy, pre_tanh=args.symmetric_trained)
-        self.policy = policy
+        self.policy = None
+        if not args.hold:
+            policy = OnnxInfer(args.onnx, awd=True)
+            if args.symmetric or args.symmetric_trained:
+                policy = SymmetricPolicy(policy, pre_tanh=args.symmetric_trained)
+            self.policy = policy
 
         self._reset_history()
         self.gate = TorqueGate()
@@ -247,7 +249,13 @@ class PolicyRunner:
                 self._reset_history()
                 print("policy_runner: torque ON")
 
-            if self.gate.enabled:
+            if self.gate.enabled and self.args.hold:
+                # --hold: isolates "torque on, write a target every tick"
+                # from "...and also run ONNX inference every tick" -- see
+                # docs/HARDWARE_SETUP.md's investigation. No policy, no
+                # obs/action bookkeeping, just hold the home pose.
+                self.sensors.write_targets(dict(zip(self.joint_names, self.default_actuator.tolist())))
+            elif self.gate.enabled:
                 command = self._policy_command()
                 obs = self._build_obs(gyro, accel, joint_pos, joint_vel, foot_contact, command)
                 action = self.policy.infer(obs)
@@ -337,7 +345,13 @@ class PolicyRunner:
 
 def build_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--onnx", required=True, help="trained policy checkpoint")
+    parser.add_argument("--onnx", help="trained policy checkpoint (not needed with --hold)")
+    parser.add_argument(
+        "--hold", action="store_true",
+        help="torque on, hold the home pose, no ONNX inference at all -- isolates "
+        "'torque on + writing a target every tick' from 'and also running "
+        "inference every tick', see docs/HARDWARE_SETUP.md",
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--mock", action="store_true", help="synthetic data, no hardware libraries needed")
     parser.add_argument("--dry-run", action="store_true", help="read real sensors but never write to servos")
@@ -358,7 +372,10 @@ def build_arg_parser():
 
 
 def main():
-    args = build_arg_parser().parse_args()
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    if not args.hold and not args.onnx:
+        parser.error("--onnx is required unless --hold is given")
     PolicyRunner(args).run()
 
 
