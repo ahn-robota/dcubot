@@ -7,6 +7,15 @@ joystick.py can't be imported here or on the Pi (it pulls in jax and
 mujoco_playground at module level), so this is a second, deliberately
 narrow source of truth. If default_config() changes one of these, update
 this file to match. See docs/SIM_TO_REAL.md.
+
+LIN_VEL_X/Y_RANGE and ANG_VEL_YAW_RANGE are the exception: actual training
+always overrides default_config()'s own range with --lin_vel_x/_y/
+ang_vel_yaw on the command line (see docs/TRAINING_RECIPE.md's recipe
+command), so these three mirror THAT, not default_config()'s unused
+defaults -- found out of sync with long14's actual trained range
+(-0.20/0.30, -0.158/0.158, -0.3/0.3, i.e. default_config()'s own numbers)
+on 2026-11-11 while adding keyboard velocity control to
+hardware/pc/twin_viewer.py; corrected here.
 """
 
 ACTION_SCALE = 0.25
@@ -15,9 +24,9 @@ GAIT_PERIOD = 0.4  # s
 MAX_MOTOR_VELOCITY = 5.24  # rad/s
 CONTROL_DT = 0.02  # s (joystick.py's ctrl_dt == mujoco_infer.py's sim_dt * decimation)
 
-LIN_VEL_X_RANGE = (-0.20, 0.30)
-LIN_VEL_Y_RANGE = (-0.158, 0.158)
-ANG_VEL_YAW_RANGE = (-0.3, 0.3)
+LIN_VEL_X_RANGE = (-0.15, 0.20)
+LIN_VEL_Y_RANGE = (-0.12, 0.12)
+ANG_VEL_YAW_RANGE = (-0.15, 0.15)
 
 # playground/dcubot/xmls/dcubot.xml's <actuator> declaration order -- the
 # ONNX policy's observation/action vectors are flat arrays in exactly this

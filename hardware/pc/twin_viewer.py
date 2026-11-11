@@ -21,6 +21,10 @@ from threading import Event, Lock, Thread
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from protocol import COMMAND_HZ, DEFAULT_PORT, SeqLossTracker, make_command, pack, unpack  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+from playground.dcubot import policy_constants  # noqa: E402
+
 DEFAULT_MODEL = "playground/dcubot/xmls/scene_flat_terrain.xml"
 
 
@@ -59,6 +63,7 @@ class BridgeLink:
         self.torque_request = False
         self.estop = False
         self.joint_target = {}
+        self.velocity_command = [0.0, 0.0, 0.0]  # [vx, vy, wz] -- hardware/pi/policy_runner.py only
 
         self.seq = 0
         self.lock = Lock()
@@ -82,6 +87,7 @@ class BridgeLink:
                 torque_request=self.torque_request,
                 estop=self.estop,
                 joint_target=dict(self.joint_target),
+                velocity_command=list(self.velocity_command),
             )
             self.sock.sendto(pack(cmd), self.addr)
             time.sleep(period)
@@ -308,9 +314,35 @@ def run_viewer(pi_host, port, model_path):
         elif keycode == ord("Y"):
             yaw_zero.reset()
             print("[Y] relative yaw re-zeroed to the current heading")
+        elif keycode in (265, 264, 263, 262, ord("Q"), ord("E"), ord("S")):
+            # Live velocity command for hardware/pi/policy_runner.py (ignored
+            # by bridge_server.py's Command mode) -- same one-key-per-axis
+            # feel as playground/dcubot/mujoco_infer.py's keyboard viewer, so
+            # muscle memory from sim testing carries over directly. Each
+            # press sets exactly one axis to the trained range's extreme and
+            # zeros the other two; S (or any other unlisted key) stops.
+            vx = vy = wz = 0.0
+            if keycode == 265:  # up
+                vx = policy_constants.LIN_VEL_X_RANGE[1]
+            elif keycode == 264:  # down
+                vx = policy_constants.LIN_VEL_X_RANGE[0]
+            elif keycode == 263:  # left
+                vy = policy_constants.LIN_VEL_Y_RANGE[1]
+            elif keycode == 262:  # right
+                vy = policy_constants.LIN_VEL_Y_RANGE[0]
+            elif keycode == ord("Q"):
+                wz = policy_constants.ANG_VEL_YAW_RANGE[1]
+            elif keycode == ord("E"):
+                wz = policy_constants.ANG_VEL_YAW_RANGE[0]
+            link.velocity_command = [vx, vy, wz]
+            print(f"[velocity] -> {[round(v, 3) for v in link.velocity_command]}")
 
     print(f"viewer: connecting to {pi_host}:{port}")
     print("keys: Space = e-stop, T = torque request on/off, M = Mirror<->Command, Y = re-zero yaw")
+    print(
+        "      up/down = forward/back, left/right = strafe, Q/E = turn, S = stop "
+        "(velocity_command, for hardware/pi/policy_runner.py only)"
+    )
     print("Command mode: move the Control-panel actuator sliders (right side) to set joint targets.")
 
     last_print = time.time()
