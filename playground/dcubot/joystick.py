@@ -169,7 +169,7 @@ from playground.dcubot.custom_rewards import (
 # layout-incompatible with dcubot's pkl, reward_imitation_dcubot used instead.
 USE_IMITATION_REWARD = True
 USE_MOTOR_SPEED_LIMITS = True
-DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_headv2_deg9.pkl"
+DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_trunk0_deg9.pkl"
 
 
 def default_config() -> config_dict.ConfigDict:
@@ -251,7 +251,7 @@ def default_config() -> config_dict.ConfigDict:
         # default is cosmetic; kept in sync with the actual trained range
         # anyway (-0.12 -> -0.06, CHANGES #20: strafe stride too long for
         # the real robot, same reasoning as #17's forward top speed).
-        lin_vel_y=[-0.06, 0.06],
+        lin_vel_y=[-0.12, 0.12],
         ang_vel_yaw=[-0.3, 0.3],
         # dcubot's own joint limits (xmls/dcubot.xml) -- see deviation #3 above.
         neck_pitch_range=[-0.785398, 0.785398],

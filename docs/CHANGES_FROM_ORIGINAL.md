@@ -332,6 +332,45 @@ the strafe stride too long for the real robot (~2x what looks controllable
 on hardware). Halved `lin_vel_y` in `default_config()` and the recipe
 command below; `--lin_vel_x`/`--ang_vel_yaw` are unchanged.
 
+## 21. Upright reference motion and home pose: walk_trunk_pitch 5.5 -> 0 deg; #20 reverted (2026-11-11, lab PC)
+
+The real robot and every trained policy lean forward. The cause is the
+reference, not the reward: with the stance foot flat, the old reference
+legs (and the old home keyframe, which was built from the reference's own
+standing pose) put the torso at **5.5 deg forward** in every one of the
+210 combos, because the Placo generator used `walk_trunk_pitch: 5.5`.
+The orientation cost (#16, -20) could only pull the policy 2-3 deg away
+from what imitation asks for (long15 standing ~7 deg).
+
+- Generator (`dcubot-reference-motion-generator`):
+  `robots/dcubot/placo_presets/medium.json` and `placo_defaults.json`
+  `walk_trunk_pitch` 5.5 -> 0. Everything else unchanged (same
+  `auto_gait.json` grid, com height 0.22). Regenerated the 210-combo sweep
+  (`auto_waddle.py --duck dcubot --sweep -j 12 --output_dir
+  recordings_omnidirectional_trunk0`) and fit at degree 9
+  (`FIT_DEGREE=9 fit_poly.py`), giving
+  `playground/dcubot/data/polynomial_coefficients_omnidirectional_trunk0_deg9.pkl`;
+  `joystick.py` now points here (head-v2 pkl stays in place).
+- Checks on the new pkl/recordings: implied torso pitch with a flat stance
+  foot -0.5..+0.5 deg over all 210 recordings (old: 5.5 deg in all); 0
+  exploded (combo, phase) pairs out of 4200; left hip_pitch range -22..21
+  deg (limit +-30); base speeds of the pure single-axis keys identical to
+  the old pkl (fwd/back 0.206/-0.207, strafe +-0.11, turn +-0.025).
+- **Home keyframe** (`scene_flat_terrain.xml` and `_train.xml`, qpos and
+  ctrl): base quat 1 0 0 0 (was 5.5 deg pitch), legs
+  hip_pitch/knee/ankle = -0.104527 / 0.050879 / 0.053608 rad (was
+  0.024435 / 0.059952 / 0.011606), the new standing recording's
+  steady-state mean (frames 100-450) averaged over left/right, z 0.264145
+  so the soles touch the floor. Whole-body CoM is over the feet in both
+  poses (0.6 mm vs 0.4 mm).
+  **Hardware:** `hardware/pi/policy_runner.py` reads its default pose from
+  this keyframe, so a policy trained after this change must be deployed
+  together with the new xml. long14 and earlier need the old xml.
+- **#20 reverted:** `lin_vel_y` back to -0.12/0.12. long15 (trained at
+  +-0.06) barely strafed in the viewer and its 64-robot strafe ratios fell
+  to 0.78/0.70; stride length on hardware can be limited from the
+  command side instead.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
