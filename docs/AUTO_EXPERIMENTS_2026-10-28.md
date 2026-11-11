@@ -364,7 +364,6 @@ The reference turning keys are symmetric (base yaw rate +-0.025 at +-0.98,
 +-0.110 at +-1.961, same hip_yaw swing), so the one-sided turning is the
 policy's own symmetry breaking. Training commands mix all three axes, while
 the eval (and the robot) use pure ones -- long2 adds single-axis commands.
-
 | long15 | long14 7.9M + CHANGES #18-#20 (stand_still -1.0, head_pos -1.0, floor friction 0.15-1.0), `--lin_vel_x -0.15 0.2 --lin_vel_y -0.06 0.06 --ang_vel_yaw -0.15 0.15` | 25.2M planned | | running (2026-11-11). Note for the real-robot neck droop: in sim long14 stands with neck_pitch -11.4 deg (forward; actual follows the target within 0.3 deg at 0.085 N*m), and the policy cannot command more than +-14.3 deg from home (tanh action x 0.25 rad), so a near-horizontal (~-90 deg) droop on hardware is not something the policy asked for: check the neck servo (holding torque, zero, sign, battery voltage) first |
 
 ### Long run summary (2026-11-04 03:00 -> 2026-11-06 03:20, ~202M steps)
