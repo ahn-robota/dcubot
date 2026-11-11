@@ -23,7 +23,7 @@ def check_near_zero(positions_deg, limit_deg=ZERO_OFFSET_LIMIT_DEG):
     return {i: p for i, p in positions_deg.items() if abs(p) > limit_deg}
 
 
-TORQUE_ENABLE_STAGGER_S = 0.01
+TORQUE_ENABLE_STAGGER_S = 0.1
 
 
 def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger_s=TORQUE_ENABLE_STAGGER_S):
@@ -38,7 +38,12 @@ def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger
     (an earlier attempt) didn't help, which points at 13 servos all
     drawing their position-hold current at the exact same instant, not
     at how fast they're asked to move. Staggering by ~13*stagger_s total
-    (0.13s at the default) spreads that current draw over time instead.
+    (1.3s at the current value) spreads that current draw over time
+    instead. Raised from 0.01s (0.13s total) on 2026-11-11: the glitch
+    still happened with the 0.01s stagger in place, so the gap was
+    widened an order of magnitude as the next thing to try before
+    assuming the cause is purely mechanical (loose USB connector) rather
+    than electrical (current surge).
 
     Returns {id: current_deg} on success. Raises RuntimeError with the
     offending {id: deg} on failure -- nothing is enabled in that case.
