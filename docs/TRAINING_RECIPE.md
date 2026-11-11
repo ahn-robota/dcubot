@@ -30,6 +30,28 @@ config, `--symmetric_policy` and
 `--lin_vel_x -0.15 0.2 --lin_vel_y -0.12 0.12 --ang_vel_yaw -0.15 0.15`,
 picking checkpoints by the 64-robot eval.
 
+## Next (queued, 2026-11-11): head droop + floor slip + strafe stride
+
+First real standing/walking test found the neck/torso drooping forward and
+the real floor far slicker than anything trained (CHANGES #18/#19/#20:
+`stand_still` -0.2 -> -1.0, `cost_head_pos` wired in, floor friction
+0.15-1.0, `lin_vel_y` halved). Continue from `long14`'s own native
+checkpoint (lab PC only, under `checkpoints/long14/` -- the step matching
+`2026_11_06_000746_7864320.onnx`, NOT that `.onnx` file itself, which is an
+inference-only export):
+
+```bash
+XLA_PYTHON_CLIENT_MEM_FRACTION=<비율> uv run python -u -m playground.dcubot.runner \
+  --task flat_terrain_train --num_envs <N> --symmetric_policy \
+  --output_dir checkpoints/<실험이름> --num_timesteps <스텝> --num_evals <N> \
+  --lin_vel_x -0.15 0.2 --lin_vel_y -0.06 0.06 --ang_vel_yaw -0.15 0.15 \
+  --restore_checkpoint_path $PWD/checkpoints/long14/<체크포인트>
+```
+
+Judge with the usual 64-robot eval (`--symmetric_trained`); also watch
+standing torso/neck pitch specifically (not just command tracking), since
+that's what #18 targets and the existing eval script doesn't report it.
+
 ## What makes it walk
 
 All in `joystick.py` / `custom_rewards.py` / `randomize.py` as committed:

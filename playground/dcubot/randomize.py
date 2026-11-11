@@ -29,6 +29,10 @@ those originals are used here (floor friction 0.4-1.0, torso mass +-0.2 kg,
 qpos0 +-0.05, kp 0.8-1.2), plus frictionloss 0.8-1.2 (upstream 0.9-1.1),
 armature 1.0-1.1 (1.0-1.05), link masses 0.85-1.15 (0.9-1.1). The torso CoM
 jitter stays +-1 cm (upstream +-5 cm; see below).
+
+Floor friction lower bound widened again 0.4 -> 0.15 (CHANGES #19): the
+real robot's PLA feet turned out far slicker on the lab floor than 0.4-1.0
+covered.
 """
 
 import jax
@@ -51,10 +55,13 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
 
     @jax.vmap
     def rand_dynamics(rng):
-        # Floor friction: =U(0.4, 1.0).
+        # Floor friction: =U(0.15, 1.0). Lower bound 0.4 -> 0.15 (CHANGES
+        # #19): the real robot's PLA feet on the lab floor slip far more
+        # than anything in 0.4-1.0 covered, visibly sliding forward while
+        # trying to stand/walk.
         rng, key = jax.random.split(rng)
         geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
-            jax.random.uniform(key, minval=0.4, maxval=1.0)
+            jax.random.uniform(key, minval=0.15, maxval=1.0)
         )
 
         # Scale static friction: *U(0.8, 1.2).

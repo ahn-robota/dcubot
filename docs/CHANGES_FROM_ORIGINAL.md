@@ -288,6 +288,50 @@ asked for all three of:
   -0.12 0.12`): the reference's gait period is fixed (0.4 s), so stride
   scales with speed; 0.2 instead of 0.3 m/s is 2/3 the stride.
 
+## 18. Head stays down while standing/walking: stand_still -0.2 -> -1.0, cost_head_pos wired in (2026-11-11, first real-hardware standing test)
+
+The first real standing test (torque on, zero velocity command) showed the
+neck drooping forward almost to horizontal, and the torso leaning forward
+too -- but `scripts/replay_directions_mujoco.py --source pkl` shows the
+reference motion itself is not tilted this way, so the droop is the
+policy's own learned behavior, not something inherited from the reference.
+
+Two gaps, found by reading `common/rewards.py`:
+- `cost_stand_still` (zero-command case, already called with
+  `ignore_head=False`) sums `|qpos - default_pose|` over all 13 joints at
+  weight -0.2 -- small next to `alive` (5.0) and `feet_gait` (6.0), so a
+  large head deviation barely matters to the total reward. Raised to -1.0.
+- `cost_head_pos` (the moving case: `move_cmd_norm > 0.01`) was never
+  called at all for dcubot -- nothing kept the head near its command (fixed
+  at 0 for now, see `docs/SIM2REAL_PLAN.md`) while walking. Wired in at
+  weight -1.0, with `head_indices` derived from `self.actuator_names` by
+  name (never hardcoded -- see that function's own docstring), in `cmd[3:]`
+  order (neck_pitch, head_pitch, head_yaw).
+
+Not yet re-trained/evaluated as of this commit -- see
+`docs/AUTO_EXPERIMENTS_2026-10-28.md` for the result once the next run
+completes.
+
+## 19. Floor friction randomization lower bound 0.4 -> 0.15 (2026-11-11, same test)
+
+Standing up on the real floor, the robot's PLA feet slipped considerably --
+visibly sliding forward while trying to balance out the neck/torso lean
+from #18, looking almost like marching in place. The training floor
+friction range (0.4-1.0, CHANGES #17) never covered anything this slick, so
+the policy was never exposed to it. Widened to 0.15-1.0
+(`playground/dcubot/randomize.py`). Not empirically measured against the
+real floor yet -- a simple incline test (tilt a sample of the floor
+material with the foot part on it; `mu = tan(angle at first slip)`) would
+give a real number to check this range against.
+
+## 20. Strafe range halved: lin_vel_y -0.12/0.12 -> -0.06/0.06 (2026-11-11, same test)
+
+Same reasoning as #17's forward top speed: the reference's gait period is
+fixed (0.4 s), so stride scales with commanded speed, and the user found
+the strafe stride too long for the real robot (~2x what looks controllable
+on hardware). Halved `lin_vel_y` in `default_config()` and the recipe
+command below; `--lin_vel_x`/`--ang_vel_yaw` are unchanged.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

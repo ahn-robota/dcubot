@@ -155,6 +155,7 @@ from playground.common.rewards import (
     cost_action_rate,
     cost_stand_still,
     cost_orientation,
+    cost_head_pos,
     reward_alive,
     reward_feet_air_time,
 )
@@ -205,9 +206,16 @@ def default_config() -> config_dict.ConfigDict:
                 tracking_ang_vel=6.0,
                 torques=-1.0e-3,
                 action_rate=-1.0,  # upstream -0.5; smoother for sim-to-real (CHANGES #17)
-                stand_still=-0.2,
+                # 0.2 -> 1.0: the real robot's neck droops forward ~90 deg
+                # while standing (zero command) -- nothing else penalizes it
+                # enough (CHANGES #18).
+                stand_still=-1.0,
                 alive=5.0,  # auto exp03: 20 -> 5 (upstream 20), see docs/AUTO_EXPERIMENTS_2026-10-28.md
                 imitation=1.0,
+                # Upstream's cost_head_pos was never called for dcubot, so
+                # nothing kept the head near its (currently fixed at 0)
+                # command while walking (CHANGES #18).
+                head_pos=-1.0,
                 # auto cur1c: restored from the pre-restart dcubot walking runs
                 # (not in upstream), see docs/AUTO_EXPERIMENTS_2026-10-28.md
                 feet_air_time=2.0,
@@ -238,7 +246,12 @@ def default_config() -> config_dict.ConfigDict:
         # widened past the achieved scale (0.103) toward upstream's
         # proportions -- see deviation #4 (2026-10-28 experiment).
         lin_vel_x=[-0.20, 0.30],
-        lin_vel_y=[-0.158, 0.158],
+        # Actual training always overrides these three via --lin_vel_x/_y/
+        # ang_vel_yaw (see docs/TRAINING_RECIPE.md's recipe command), so this
+        # default is cosmetic; kept in sync with the actual trained range
+        # anyway (-0.12 -> -0.06, CHANGES #20: strafe stride too long for
+        # the real robot, same reasoning as #17's forward top speed).
+        lin_vel_y=[-0.06, 0.06],
         ang_vel_yaw=[-0.3, 0.3],
         # dcubot's own joint limits (xmls/dcubot.xml) -- see deviation #3 above.
         neck_pitch_range=[-0.785398, 0.785398],
@@ -273,6 +286,13 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         self._default_actuator = self._mj_model.keyframe(
             "home"
         ).ctrl  # ctrl of all the actual joints (no floating base and no backlash)
+
+        # cost_head_pos's head_indices: derived by name (never a hardcoded
+        # slice -- see its docstring), in the same order as commands[3:]
+        # (neck_pitch, head_pitch, head_yaw). CHANGES #18.
+        self._head_indices = jp.array(
+            [self.actuator_names.index(n) for n in ("neck_pitch", "head_pitch", "head_yaw")]
+        )
 
         # Note: First joint is freejoint.
         self._lowers, self._uppers = self.mj_model.jnt_range[1:].T
@@ -705,6 +725,12 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             # walking back slowly (CHANGES #16).
             "orientation": cost_orientation(self.get_gravity(data))
             * (info["command"][0] > -0.02),
+            "head_pos": cost_head_pos(
+                self.get_actuator_joints_qpos(data.qpos),
+                self.get_actuator_joints_qvel(data.qvel),
+                info["command"],
+                self._head_indices,
+            ),
             "alive": reward_alive(),
             "stand_still": cost_stand_still(
                 info["command"],

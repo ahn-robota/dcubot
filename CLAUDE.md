@@ -103,7 +103,9 @@ uv run tensorboard --logdir checkpoints/<실험이름>
     - 서보 3개 부호 반전(left_hip_yaw, left_hip_roll, head_yaw)과 IMU 축 변환은 실기 런타임에서만 함. 시뮬레이션·정책은 그대로
     - 서보 레지스터 P 32는 Open Duck 설정 스크립트와 같은 값이고, 시뮬레이션 kp 17.8도 Open Duck 값(BAM 식별)이다. P를 바꾸면 시뮬레이션과 달라지므로 그대로 둔다
     - 장기 학습 정책은 좌우 대칭 추론이 필요: `mujoco_infer.py`의 `SymmetricPolicy(pre_tanh=True)`
+- [x] **첫 실물 서기/걷기 테스트 (라즈베리파이+노트북, 2026-11-11)**: 토크 켠 채 제자리 서기 + 짧은 보행 확인. 목/몸통이 앞으로 기울고(레퍼런스 자체는 안 기울어짐 -- 정책이 학습 중 택한 행동), 전후진 시 좌우 휘청임, 좌우 평행보행 보폭 과다, 바닥 마찰이 학습 범위(0.4~1.0)보다 훨씬 미끄러워 균형 잡으려 미끄러지며 전진하는 게 제자리걸음처럼 보임을 확인
 - [ ] **다음**:
-  1. 실물 로봇 무게중심 확인: 전원을 켜고 관절 0°로 세워 앞으로 쏠리는지, 전체 무게(모델 2.075 kg), 라즈베리파이·전자부품 위치. 모델과 다르면 URDF 질량·무게중심을 고치고 최종 정책에서 이어서 학습
-  2. 실물 실행기(노트북·라즈베리파이)에 위 항목을 반영하고 [`docs/SIM2REAL_PLAN.md`](docs/SIM2REAL_PLAN.md) 순서대로 진행 (디지털 트윈 확인 → 매달기 → 받쳐 세우기 → 걷기)
-  3. 최종 정책 파일은 git에 없으므로 노트북으로 복사: `scp <실습실PC>:~/dcubot/DCUBOT/rl_training/checkpoints/long14/2026_11_06_000746_7864320.onnx .`
+  1. 위 테스트에서 나온 보상/랜덤화 수정(`CHANGES_FROM_ORIGINAL.md` #18~#20: 목 자세 벌점 강화, 바닥 마찰 하한 0.15, 좌우 보폭 절반)으로 `long14`에서 이어서 학습 -- 명령은 [`docs/TRAINING_RECIPE.md`](docs/TRAINING_RECIPE.md) "Next (queued)" 참고
+  2. 실물 로봇 무게중심도 별도로 확인: 전원 없이 관절 0°로 세워 앞으로 쏠리는지, 전체 무게(모델 2.075 kg), 라즈베리파이·전자부품 위치. 모델과 다르면 URDF 질량·무게중심도 고치기
+  3. [`docs/SIM2REAL_PLAN.md`](docs/SIM2REAL_PLAN.md) 나머지 단계 계속 (옆걸음 → 회전 → 후진)
+  4. 새 정책도 git에 없으므로 노트북으로 복사 후 `hardware/policies/current.onnx` 교체: `scp <실습실PC>:~/dcubot/DCUBOT/rl_training/checkpoints/<실험이름>/<체크포인트>.onnx .`
