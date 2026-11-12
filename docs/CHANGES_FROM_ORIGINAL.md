@@ -385,8 +385,14 @@ zero command is only drawn 10% of the time.
   (default False = upstream behaviour); True drops the moving-only gate.
 - `joystick.py`: `cost_head_pos(..., always=True)`, scale `head_pos`
   -1.0 -> -20.0 (same size as the orientation cost that straightened the
-  torso, #16). The head command (`cmd[3:]`) is still randomized as before;
-  it is 0 on the real robot and in the viewer.
+  torso, #16).
+- `head_range_factor` 1.0 -> 0.0: head commands (`cmd[3:]`) are now always
+  0, as on the real robot and in the viewer. They used to be drawn from the
+  full joint ranges (neck +-45, head +-90 deg), far beyond the +-14.3 deg
+  the policy can reach from home, so at -20 the cost was mostly an
+  unreachable random target (episode cost ~15000 vs ~200 for the others,
+  train reward 148 -> 24) and the standing neck did not move in the first
+  4.3M steps (-11.7 deg). Restarted long17 with this; reward at step 0 170.
 
 ## Unchanged (confirmed identical to upstream)
 

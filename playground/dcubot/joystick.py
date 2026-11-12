@@ -259,7 +259,7 @@ def default_config() -> config_dict.ConfigDict:
         neck_pitch_range=[-0.785398, 0.785398],
         head_pitch_range=[-1.570796, 1.570796],
         head_yaw_range=[-1.570796, 1.570796],
-        head_range_factor=1.0,
+        head_range_factor=0.0,  # head commands always 0, as on the real robot (CHANGES #22)
     )
 
 
