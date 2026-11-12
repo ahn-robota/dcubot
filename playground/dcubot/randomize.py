@@ -105,12 +105,20 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
             + jax.random.uniform(key, shape=(model.nu,), minval=-0.05, maxval=0.05)
         )
 
-        # # Randomize KP
+        # Randomize KP: *U(0.7, 1.2) (was 0.8-1.2, CHANGES #24: sluggish
+        # real servos, e.g. at low battery voltage).
         rng, key = jax.random.split(rng)
-        factor = jax.random.uniform(key, shape=(model.nu,), minval=0.8, maxval=1.2)
+        factor = jax.random.uniform(key, shape=(model.nu,), minval=0.7, maxval=1.2)
         current_kp = model.actuator_gainprm[:, 0]
         actuator_gainprm = model.actuator_gainprm.at[:, 0].set(current_kp * factor)
         actuator_biasprm = model.actuator_biasprm.at[:, 1].set(-current_kp * factor)
+
+        # Scale servo max torque: *U(0.7, 1.05) per actuator (CHANGES #24).
+        # The 3.35 N*m BAM value is at nominal voltage; the real battery has
+        # sagged to 6.2 V under load.
+        rng, key = jax.random.split(rng)
+        factor = jax.random.uniform(key, shape=(model.nu,), minval=0.7, maxval=1.05)
+        actuator_forcerange = model.actuator_forcerange * factor[:, None]
 
         return (
             geom_friction,
@@ -121,6 +129,7 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
             qpos0,
             actuator_gainprm,
             actuator_biasprm,
+            actuator_forcerange,
         )
 
     (
@@ -132,6 +141,7 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
         qpos0,
         actuator_gainprm,
         actuator_biasprm,
+        actuator_forcerange,
     ) = rand_dynamics(rng)
 
     in_axes = jax.tree_util.tree_map(lambda x: None, model)
@@ -145,6 +155,7 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
             "qpos0": 0,
             "actuator_gainprm": 0,
             "actuator_biasprm": 0,
+            "actuator_forcerange": 0,
         }
     )
 
@@ -158,6 +169,7 @@ def domain_randomize(model: mjx.Model, rng: jax.Array):
             "qpos0": qpos0,
             "actuator_gainprm": actuator_gainprm,
             "actuator_biasprm": actuator_biasprm,
+            "actuator_forcerange": actuator_forcerange,
         }
     )
 

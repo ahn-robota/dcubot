@@ -417,6 +417,32 @@ policy-driven, held near 0 by head_pos).
   unchanged (~33%), torso 0.5 deg standing, but strafe 0.57/0.49 and
   `|r-1|` 0.22 (0.11 with its own neck).
 
+## 24. Servo tracking noise, weaker servos, contact dropout, torque cost x50 (2026-11-13, lab PC)
+
+On the real robot the legs move fast and jerky while the same policy is
+smooth in MuJoCo (checklist on `hardware/bringup`:
+`docs/SIM2REAL_DEBUG_2026-11-13.md`). The user asked for the policy to be
+trained against servos that do not track well, as in actuator-noise domain
+randomization papers. Until now only kp (0.8-1.2) and a 0-3 step action
+delay touched the servo side.
+
+- `randomize.py`: kp *U(0.7, 1.2) (was 0.8-1.2); new per-actuator max
+  torque `actuator_forcerange` *U(0.7, 1.05) (3.35 N*m is at nominal
+  voltage, the real battery has sagged to 6.2 V).
+- `joystick.py` `step()`: the target sent to the simulated servo is the
+  policy's target + a per-episode offset U(-0.03, 0.03) rad per joint
+  (`noise_config.scales.target_bias`, zero/calibration error) + per-step
+  N(0, 0.02 rad) (`target_noise`). `info["motor_targets"]`, which the
+  observation shows, stays the clean target, as on the robot. Applied
+  after the neck fix (#23), so the neck target is noisy too.
+- `_get_obs()`: each foot-contact observation reads False with probability
+  0.05 per step (`contact_dropout`); rewards still use the true contact.
+- Reward scale `torques` -1e-3 -> -0.05: at -1e-3 it was ~4 per episode
+  against 174-357 for orientation/action_rate/head_pos (long17), i.e. no
+  effect. Torque is roughly proportional to servo current.
+- All three noise terms scale with `noise_config.level` like the existing
+  ones.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

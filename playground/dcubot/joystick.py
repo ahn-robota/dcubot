@@ -198,6 +198,16 @@ def default_config() -> config_dict.ConfigDict:
                 knee_pos=0.05,  # rad, for each knee joint
                 ankle_pos=0.08,  # rad, for each ankle joint
                 joint_vel=2.5,  # rad/s
+                # Servo tracking noise (CHANGES #24): the target actually sent
+                # to the simulated servo is the policy's target + a per-episode
+                # offset U(-target_bias, target_bias) + per-step N(0, target_noise),
+                # so the servo never tracks exactly what the policy asked for.
+                # The observation keeps the noiseless target, as on the robot.
+                target_bias=0.03,  # rad
+                target_noise=0.02,  # rad
+                # Each foot-contact observation reads False with this
+                # probability per step (switch bounce / missed press).
+                contact_dropout=0.05,
                 gravity=0.1,
                 linvel=0.1,
                 gyro=0.1,
@@ -208,7 +218,7 @@ def default_config() -> config_dict.ConfigDict:
             scales=config_dict.create(
                 tracking_lin_vel=2.5,
                 tracking_ang_vel=6.0,
-                torques=-1.0e-3,
+                torques=-0.05,  # upstream -1e-3: ~0.1% of the reward; x50 (CHANGES #24)
                 action_rate=-1.0,  # upstream -0.5; smoother for sim-to-real (CHANGES #17)
                 # 0.2 -> 1.0: the real robot's neck droops forward ~90 deg
                 # while standing (zero command) -- nothing else penalizes it
@@ -413,6 +423,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             maxval=self._config.push_config.interval_range[1],
         )
         push_interval_steps = jp.round(push_interval / self.dt).astype(jp.int32)
+        rng, bias_rng = jax.random.split(rng)
 
         info = {
             "rng": rng,
@@ -424,6 +435,11 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             "last_last_act": jp.zeros(self.mjx_model.nu),
             "last_last_last_act": jp.zeros(self.mjx_model.nu),
             "motor_targets": self._default_actuator,
+            "target_bias": jax.random.uniform(
+                bias_rng, (self.mjx_model.nu,),
+                minval=-self._config.noise_config.scales.target_bias,
+                maxval=self._config.noise_config.scales.target_bias,
+            ) * self._config.noise_config.level,
             "feet_air_time": jp.zeros(2),
             "last_contact": jp.zeros(2, dtype=bool),
             "swing_peak": jp.zeros(2),
@@ -517,7 +533,16 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 prev_motor_targets + self._config.max_motor_velocity * self.dt,
             )
 
-        data = mjx_env.step(self.mjx_model, state.data, motor_targets, self.n_substeps)
+        # Servo tracking noise (CHANGES #24); info keeps the clean target.
+        state.info["rng"], target_rng = jax.random.split(state.info["rng"])
+        sent_targets = (
+            motor_targets
+            + state.info["target_bias"]
+            + jax.random.normal(target_rng, motor_targets.shape)
+            * self._config.noise_config.scales.target_noise
+            * self._config.noise_config.level
+        )
+        data = mjx_env.step(self.mjx_model, state.data, sent_targets, self.n_substeps)
         state.info["motor_targets"] = motor_targets
 
         contact = jp.array(
@@ -654,6 +679,14 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
 
         linvel = self.get_local_linvel(data)
 
+        # Foot-contact dropout (CHANGES #24): obs only, rewards use `contact`.
+        info["rng"], noise_rng = jax.random.split(info["rng"])
+        noisy_contact = contact * (
+            jax.random.uniform(noise_rng, contact.shape)
+            >= self._config.noise_config.scales.contact_dropout
+            * self._config.noise_config.level
+        )
+
         # Gait-phase clock, upstream-style: runs unconditionally every step
         # (not gated on command magnitude) -- matches
         # open_duck_mini_v2/joystick.py's imitation_phase exactly. See
@@ -674,7 +707,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 info["last_last_act"],  # 13
                 info["last_last_last_act"],  # 13
                 info["motor_targets"],  # 13
-                contact,  # 2
+                noisy_contact,  # 2
                 gait_phase,  # 2
             ]
         )
