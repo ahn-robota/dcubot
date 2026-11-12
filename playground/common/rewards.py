@@ -134,12 +134,16 @@ def cost_head_pos(
     joints_qvel: jax.Array,
     cmd: jax.Array,
     head_indices: jax.Array,
+    always: bool = False,
 ) -> jax.Array:
     """head_indices: indices of the head joints within joints_qpos, in the
     same order as cmd[3:]. Must be derived from joint NAMES by the caller --
     never hardcode a numeric slice here (was previously joints_qpos[5:9],
     the original duck's head-joint slice; wrong for any robot with a
-    different joint count/order, e.g. dcubot's 13-joint/no-antenna layout)."""
+    different joint count/order, e.g. dcubot's 13-joint/no-antenna layout).
+
+    always: upstream only applies this while moving (|cmd[:3]| > 0.01);
+    True also applies it while standing (dcubot CHANGES #22)."""
     move_cmd_norm = jp.linalg.norm(cmd[:3])
     head_cmd = cmd[3:]
     head_pos = joints_qpos[head_indices]
@@ -151,6 +155,8 @@ def cost_head_pos(
 
     # head_vel_error = jp.sum(jp.square(head_vel - target_head_qvel))
 
+    if always:
+        return jp.nan_to_num(head_pos_error)
     return jp.nan_to_num(head_pos_error) * (move_cmd_norm > 0.01)
     # return jp.nan_to_num(head_pos_error + head_vel_error)
 

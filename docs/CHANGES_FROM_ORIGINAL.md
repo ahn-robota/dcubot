@@ -371,6 +371,23 @@ from what imitation asks for (long15 standing ~7 deg).
   to 0.78/0.70; stride length on hardware can be limited from the
   command side instead.
 
+## 22. Neck held at its command while standing too: head_pos -1 -> -20, always on (2026-11-12, lab PC)
+
+With the upright reference (#21) the torso stands at 0-1.5 deg, but the
+neck still sits ~11 deg forward at a standstill (every long16 checkpoint
+-10.9..-12.4 deg; long14 was the same). Nothing holds it there: imitation
+only covers the legs, upstream's `cost_head_pos` is multiplied by
+`|cmd[:3]| > 0.01` (off while standing), and `stand_still` sums |q - home|
+over all 13 joints, so 0.19 rad on one joint is a small share, and the
+zero command is only drawn 10% of the time.
+
+- `playground/common/rewards.py` `cost_head_pos`: new `always` argument
+  (default False = upstream behaviour); True drops the moving-only gate.
+- `joystick.py`: `cost_head_pos(..., always=True)`, scale `head_pos`
+  -1.0 -> -20.0 (same size as the orientation cost that straightened the
+  torso, #16). The head command (`cmd[3:]`) is still randomized as before;
+  it is 0 on the real robot and in the viewer.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

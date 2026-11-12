@@ -214,8 +214,10 @@ def default_config() -> config_dict.ConfigDict:
                 imitation=1.0,
                 # Upstream's cost_head_pos was never called for dcubot, so
                 # nothing kept the head near its (currently fixed at 0)
-                # command while walking (CHANGES #18).
-                head_pos=-1.0,
+                # command while walking (CHANGES #18). -1 -> -20 and also
+                # applied while standing: the policy kept the neck ~11 deg
+                # forward at a standstill (CHANGES #22).
+                head_pos=-20.0,
                 # auto cur1c: restored from the pre-restart dcubot walking runs
                 # (not in upstream), see docs/AUTO_EXPERIMENTS_2026-10-28.md
                 feet_air_time=2.0,
@@ -730,6 +732,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                 self.get_actuator_joints_qvel(data.qvel),
                 info["command"],
                 self._head_indices,
+                always=True,  # also while standing (CHANGES #22)
             ),
             "alive": reward_alive(),
             "stand_still": cost_stand_still(
