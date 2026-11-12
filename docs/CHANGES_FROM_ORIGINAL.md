@@ -394,6 +394,29 @@ zero command is only drawn 10% of the time.
   train reward 148 -> 24) and the standing neck did not move in the first
   4.3M steps (-11.7 deg). Restarted long17 with this; reward at step 0 170.
 
+## 23. Neck fixed at home: the policy's neck output is ignored (2026-11-13, lab PC)
+
+#22 moved the standing neck only -11.7 -> -10.2 deg in 21M steps (long17),
+so the neck is now taken away from the policy: `fix_neck=True` in
+`default_config()` sets the neck_pitch motor target to its home value (0)
+every step, after `default + action * action_scale` and before the motor
+speed clip. The policy still outputs 13 actions (ONNX shape unchanged) and
+its neck action still appears in the observation's last actions; only the
+motor target ignores it. head_pitch and head_yaw are unchanged (still
+policy-driven, held near 0 by head_pos).
+
+- Viewer: `mujoco_infer.py --fix_neck`; eval: `eval_command_tracking.py
+  --fix_neck` (also sets the env config in `--env` mode, so policies from
+  before #23 are evaluated without it unless asked).
+- **Real robot:** `hardware/pi/policy_runner.py` must also set the
+  neck_pitch target to home after computing `default + action * 0.25`,
+  for every policy trained with this (long18 onward). Without it the
+  robot moves the neck the way the policy happens to output, which it
+  never did in training.
+- long17 21.3M with the neck fixed, before any retraining (64-env): falls
+  unchanged (~33%), torso 0.5 deg standing, but strafe 0.57/0.49 and
+  `|r-1|` 0.22 (0.11 with its own neck).
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

@@ -44,6 +44,9 @@ COMMANDS = [
 ]
 
 
+FIX_NECK = False
+
+
 def run(onnx_path, command, symmetric=None):
     m = MjInfer(XML, onnx_path, False)
     if symmetric:
@@ -61,6 +64,9 @@ def run(onnx_path, command, symmetric=None):
         m.last_last_action = m.last_action.copy()
         m.last_action = action.copy()
         targets = m.default_actuator + action * m.action_scale
+        if FIX_NECK:  # CHANGES #23
+            n = m.actuator_names.index("neck_pitch")
+            targets[n] = m.default_actuator[n]
         if USE_MOTOR_SPEED_LIMITS:
             limit = m.max_motor_velocity * m.sim_dt * m.decimation
             targets = np.clip(
@@ -88,9 +94,11 @@ def run_env(onnx_path, command, n_envs, symmetric=None, env_fns={}):
     from playground.common.onnx_infer import OnnxInfer
 
     if not env_fns:
-        from playground.dcubot.joystick import Joystick
+        from playground.dcubot.joystick import Joystick, default_config
 
-        env = Joystick(task="flat_terrain_train")
+        config = default_config()
+        config.fix_neck = FIX_NECK
+        env = Joystick(task="flat_terrain_train", config=config)
         env_fns.update(
             env=env,
             reset=jax.jit(jax.vmap(env.reset)),
@@ -146,7 +154,14 @@ def main():
         "--env", type=int, default=0, metavar="N",
         help="average N robots in the training env instead of one MjInfer run",
     )
+    parser.add_argument(
+        "--fix_neck", action="store_true",
+        help="hold neck_pitch at home (policies trained with fix_neck, CHANGES #23); "
+        "without it the policy's neck output is used, also in --env mode",
+    )
     args = parser.parse_args()
+    global FIX_NECK
+    FIX_NECK = args.fix_neck
 
     for onnx_path in args.onnx:
         ratios, falls, rows = [], 0, []

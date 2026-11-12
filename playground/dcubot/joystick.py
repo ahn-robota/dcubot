@@ -179,6 +179,10 @@ def default_config() -> config_dict.ConfigDict:
         episode_length=1000,
         action_repeat=1,
         action_scale=0.25,
+        # neck_pitch target held at home (0) whatever the policy outputs; the
+        # policy's neck output is ignored (CHANGES #23). The real-robot runner
+        # must do the same, and so must the MuJoCo viewer (--fix_neck).
+        fix_neck=True,
         dof_vel_scale=0.05,
         history_len=0,
         soft_joint_pos_limit_factor=0.95,
@@ -295,6 +299,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         self._head_indices = jp.array(
             [self.actuator_names.index(n) for n in ("neck_pitch", "head_pitch", "head_yaw")]
         )
+        self._neck_index = self.actuator_names.index("neck_pitch")
 
         # Note: First joint is freejoint.
         self._lowers, self._uppers = self.mj_model.jnt_range[1:].T
@@ -499,6 +504,10 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         motor_targets = (
             self._default_actuator + action_w_delay * self._config.action_scale
         )
+        if self._config.get("fix_neck", False):
+            motor_targets = motor_targets.at[self._neck_index].set(
+                self._default_actuator[self._neck_index]
+            )
 
         if USE_MOTOR_SPEED_LIMITS:
             prev_motor_targets = state.info["motor_targets"]

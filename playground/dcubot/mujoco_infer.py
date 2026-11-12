@@ -51,6 +51,8 @@ class MjInfer(MJInferBase):
 
         self.policy = OnnxInfer(onnx_model_path, awd=True)
         self.watch_dir = None
+        self.fix_neck = False  # CHANGES #23
+        self.neck_index = self.actuator_names.index("neck_pitch")
         # Heading hold (0 = off): with no turn or strafe command, add a yaw
         # command gain * (held heading - IMU heading), clipped to the turn
         # range, so slow yaw drift is corrected. A turn or strafe command moves
@@ -274,6 +276,8 @@ class MjInfer(MJInferBase):
                         self.motor_targets = (
                             self.default_actuator + action * self.action_scale
                         )
+                        if self.fix_neck:  # CHANGES #23: neck held at home
+                            self.motor_targets[self.neck_index] = self.default_actuator[self.neck_index]
 
                         if USE_MOTOR_SPEED_LIMITS:
                             self.motor_targets = np.clip(
@@ -314,6 +318,8 @@ if __name__ == "__main__":
         default="playground/dcubot/xmls/scene_flat_terrain.xml",
     )
     parser.add_argument("--standing", action="store_true", default=False)
+    parser.add_argument("--fix_neck", action="store_true", default=False,
+                        help="hold neck_pitch at home, ignoring the policy (policies trained with fix_neck, CHANGES #23)")
     parser.add_argument(
         "--watch_dir",
         type=str,
@@ -364,6 +370,7 @@ if __name__ == "__main__":
     mjinfer = MjInfer(args.model_path, onnx_path, args.standing)
     mjinfer.watch_dir = args.watch_dir
     mjinfer.heading_gain = args.heading_hold
+    mjinfer.fix_neck = args.fix_neck
     if args.symmetric or args.symmetric_trained:
         mjinfer.policy = SymmetricPolicy(mjinfer.policy, pre_tanh=args.symmetric_trained)
     for name, attr in (("lin_vel_x", "COMMANDS_RANGE_X"), ("lin_vel_y", "COMMANDS_RANGE_Y"),
