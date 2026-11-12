@@ -21,4 +21,6 @@ git push
 git pull
 ```
 
+**정책과 기본 자세(xml)는 짝이다.** `policy_runner.py`는 기본 자세를 `playground/dcubot/xmls/scene_flat_terrain.xml`의 home에서 읽는다. 정책을 학습한 때와 home이 다르면(예: 2026-11-12 long17부터 몸통을 세운 새 home) 같은 커밋에서 xml도 함께 바꾼다.
+
 그 다음 `hardware/pi/policy_runner.py --onnx hardware/policies/current.onnx ...`로 실행한다.
