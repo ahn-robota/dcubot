@@ -34,16 +34,12 @@ def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger
 
     Real hardware repeatedly showed a USB+I2C comms glitch within one
     control tick of torque turning on (see docs/HARDWARE_SETUP.md's
-    "알려진 문제" entry); slewing the commanded *target* more gently
-    (an earlier attempt) didn't help, which points at 13 servos all
-    drawing their position-hold current at the exact same instant, not
-    at how fast they're asked to move. Staggering by ~13*stagger_s total
-    (1.3s at the current value) spreads that current draw over time
-    instead. Raised from 0.01s (0.13s total) on 2026-11-11: the glitch
-    still happened with the 0.01s stagger in place, so the gap was
-    widened an order of magnitude as the next thing to try before
-    assuming the cause is purely mechanical (loose USB connector) rather
-    than electrical (current surge).
+    "해결된 문제" entry). Raised from 0.01s (0.13s total) to 0.1s (1.3s
+    total) on 2026-11-11 as a guess at current-surge mitigation; the
+    real cause turned out (2026-11-13) to be a disconnected ground wire
+    on the servo power barrel jack, unrelated to stagger timing. Left at
+    0.1s anyway since spreading enable current over time is still
+    reasonable and the wider gap is harmless.
 
     Returns {id: current_deg} on success. Raises RuntimeError with the
     offending {id: deg} on failure -- nothing is enabled in that case.

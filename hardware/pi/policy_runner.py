@@ -90,7 +90,7 @@ class PolicyRunner:
 
         self.policy = None
         if not args.hold:
-            policy = OnnxInfer(args.onnx, awd=True)
+            policy = OnnxInfer(args.onnx, awd=True, num_threads=1)
             if args.symmetric or args.symmetric_trained:
                 policy = SymmetricPolicy(policy, pre_tanh=args.symmetric_trained)
             self.policy = policy
