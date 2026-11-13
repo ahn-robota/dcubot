@@ -455,22 +455,30 @@ policy pulls the legs in), strafing left/right -1.4/-2.2 mm with the shins
 overlapping in 10%/6% of steps, backward -0.3 mm.
 
 - `dcubot.xml` and `dcubot_train.xml`: each thigh and shin gets a
-  collision-only box `<part>_box` (the bounding box of its mesh in the
-  body frame; `contype=0 conaffinity=0`, group 3, no effect on mass since
-  every body has an explicit inertial). A `<contact>` block adds 4 explicit
-  pairs, left vs right only (shin-shin, thigh-thigh, shin-thigh both ways),
-  so no same-leg excludes are needed.
-- Home-pose shin gap: box 11.7 mm, mesh 11.5 mm.
-- Boxes, not the meshes: mesh-mesh pairs made the MJX env step ~40%
-  slower (1093 -> 646 steps/s at 1024 envs); boxes cost ~2% (1068).
+  collision-only geom `<part>_hull`: the convex hull of its own mesh
+  reduced with `maxhullvert="32"` (`contype=0 conaffinity=0`, group 3, no
+  effect on mass since every body has an explicit inertial). A `<contact>`
+  block adds 4 explicit pairs, left vs right only (shin-shin, thigh-thigh,
+  shin-thigh both ways), so no same-leg excludes are needed.
+- Accuracy vs the full mesh hull (hip roll -0.15..0.1, knee +-0.3): the
+  reduced hull touches 0-2.7 mm later (it can only be smaller). Home-pose
+  shin gap 14.4 mm (lowpoly, training) / 13.2 mm (full mesh) vs 11.5 mm.
+- MJX env step at 1024 envs: no pairs 1093/s, 32-vertex hulls 930/s
+  (-15%), 64-vertex 718/s, full meshes 646/s.
+- First version (long20) used bounding boxes in the body frame (-2%
+  speed). Their corners stuck out when the hips rolled in, so the shin
+  boxes touched while the meshes were still ~5 mm apart, and long20 leaned
+  the legs on each other (box contact standing 63% vs 32% for long18):
+  a brace the real robot does not have. Replaced by the hulls; long20 is
+  not used further.
 - Checked that MuJoCo and MJX both report the pair contacts when the hip
   rolls push the legs together.
 - No reward term or weight changed: colliding legs now trip the robot in
-  sim, which the existing rewards/termination already punish. A clearance
+  sim, which the existing rewards/termination already punish. A contact
   penalty was considered and not added.
 - Eval with `scene_flat_terrain.xml` now also has leg collision, so
   numbers after this are not directly comparable with earlier ones.
-- Trained from long19 25.6M as long20.
+- Trained from long19 25.6M as long20 (boxes) and long21 (hulls).
 
 ## Unchanged (confirmed identical to upstream)
 
