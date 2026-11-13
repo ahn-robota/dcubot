@@ -87,6 +87,9 @@ class PolicyRunner:
 
         self.joint_limits = load_joint_limits(DCUBOT_MJCF_PATH)
         self.default_actuator = np.array(load_home_ctrl(SCENE_MJCF_PATH))
+        # long18+ was trained with the neck_pitch target held at home (master
+        # CHANGES #23): the policy's neck output is ignored, so do the same here.
+        self.neck_index = self.joint_names.index("neck_pitch") if args.fix_neck else None
 
         self.policy = None
         if not args.hold:
@@ -270,6 +273,8 @@ class PolicyRunner:
                     max_velocity = policy_constants.MAX_MOTOR_VELOCITY
                 max_step = max_velocity * policy_constants.CONTROL_DT
                 motor_targets = self.default_actuator + self.last_action * policy_constants.ACTION_SCALE
+                if self.neck_index is not None:
+                    motor_targets[self.neck_index] = self.default_actuator[self.neck_index]
                 motor_targets = np.clip(
                     motor_targets, self.prev_motor_targets - max_step, self.prev_motor_targets + max_step
                 )
@@ -359,6 +364,11 @@ def build_arg_parser():
     parser.add_argument(
         "--symmetric_trained", action="store_true",
         help="policy was trained with runner.py --symmetric_policy: rebuild it exactly",
+    )
+    parser.add_argument(
+        "--fix_neck", action=argparse.BooleanOptionalAction, default=True,
+        help="hold neck_pitch at home and ignore the policy's neck output, as in training "
+        "from long18 on (default). Use --no-fix_neck for long17 and older policies",
     )
     parser.add_argument(
         "--device", default="/dev/ttyACM0",

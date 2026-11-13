@@ -24,3 +24,5 @@ git pull
 **정책과 기본 자세(xml)는 짝이다.** `policy_runner.py`는 기본 자세를 `playground/dcubot/xmls/scene_flat_terrain.xml`의 home에서 읽는다. 정책을 학습한 때와 home이 다르면(예: 2026-11-12 long17부터 몸통을 세운 새 home) 같은 커밋에서 xml도 함께 바꾼다.
 
 그 다음 `hardware/pi/policy_runner.py --onnx hardware/policies/current.onnx ...`로 실행한다.
+
+**long18부터는 목을 고정해서 학습했다.** `policy_runner.py`가 기본으로 neck_pitch 목표를 home에 고정한다(`--fix_neck`). 목을 고정하지 않고 학습한 long17 이전 정책은 `--no-fix_neck`으로 실행한다.
