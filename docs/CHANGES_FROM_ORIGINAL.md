@@ -443,6 +443,35 @@ delay touched the servo side.
 - All three noise terms scale with `noise_config.level` like the existing
   ones.
 
+## 25. Left-right leg collision (2026-11-13, lab PC)
+
+On the real robot (long18 12.8M) the legs hit each other after a slip.
+In sim they could not: the `sts3215` geom class has `contype=0
+conaffinity=0`, so every thigh/shin geom passed through the other leg;
+only the feet (default contype) collided, with the floor and each other.
+Measured in sim with long18 12.8M (convex-hull distance between the legs,
+8 s per command): standing 2.5 mm minimum (home pose 11.5 mm, so the
+policy pulls the legs in), strafing left/right -1.4/-2.2 mm with the shins
+overlapping in 10%/6% of steps, backward -0.3 mm.
+
+- `dcubot.xml` and `dcubot_train.xml`: each thigh and shin gets a
+  collision-only box `<part>_box` (the bounding box of its mesh in the
+  body frame; `contype=0 conaffinity=0`, group 3, no effect on mass since
+  every body has an explicit inertial). A `<contact>` block adds 4 explicit
+  pairs, left vs right only (shin-shin, thigh-thigh, shin-thigh both ways),
+  so no same-leg excludes are needed.
+- Home-pose shin gap: box 11.7 mm, mesh 11.5 mm.
+- Boxes, not the meshes: mesh-mesh pairs made the MJX env step ~40%
+  slower (1093 -> 646 steps/s at 1024 envs); boxes cost ~2% (1068).
+- Checked that MuJoCo and MJX both report the pair contacts when the hip
+  rolls push the legs together.
+- No reward term or weight changed: colliding legs now trip the robot in
+  sim, which the existing rewards/termination already punish. A clearance
+  penalty was considered and not added.
+- Eval with `scene_flat_terrain.xml` now also has leg collision, so
+  numbers after this are not directly comparable with earlier ones.
+- Trained from long19 25.6M as long20.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

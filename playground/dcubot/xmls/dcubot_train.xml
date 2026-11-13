@@ -89,10 +89,12 @@
               <inertial pos="8.902429422456663e-07 0.01892934500005262 -0.05862769224502802" mass="0.09100786" fullinertia="6.2e-05 5e-05 2.4e-05 -0 -1e-06 0"/>
               <joint name="left_hip_pitch" type="hinge" axis="0.0 -1.0 -0.0" range="-0.523599 0.523599" class="sts3215"/>
               <geom class="sts3215" pos="0.00115 -0.0171 0.06856" type="mesh" rgba="0.7 0.7 0.7 1" mesh="thigh_L_1"/>
+              <geom name="thigh_L_1_box" type="box" pos="-0.00026 0.01841 -0.03885" size="0.01523 0.02239 0.05000" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
               <body name="shin_L_1" pos="0.0 -5e-05 -0.07865">
                 <inertial pos="0.0006230643329510485 0.01982675239251933 -0.05028900588347457" mass="0.12600982" fullinertia="0.000117 9.9e-05 5.9e-05 0 -3e-06 -4e-06"/>
                 <joint name="left_knee" type="hinge" axis="-0.0 -1.0 -0.0" range="-0.785398 0.523599" class="sts3215"/>
                 <geom class="sts3215" pos="0.00115 -0.01705 0.14721" type="mesh" rgba="0.7 0.7 0.7 1" mesh="shin_L_1"/>
+                <geom name="shin_L_1_box" type="box" pos="-0.00003 0.02379 -0.03910" size="0.02887 0.03438 0.05028" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
                 <body name="foot_L_1" pos="0.0 -5e-05 -0.07865">
                   <inertial pos="0.01088482013785114 0.018685818526315574 -0.023602507977934784" mass="0.081999565" fullinertia="2.3e-05 6.8e-05 7.6e-05 0 -0 2e-06"/>
                   <joint name="left_ankle" type="hinge" axis="0.0 -1.0 -0.0" range="-0.785398 0.698132" class="sts3215"/>
@@ -115,10 +117,12 @@
               <inertial pos="8.902429401898022e-07 -0.017814607410842922 -0.05862769224502827" mass="0.09100786" fullinertia="6.2e-05 5e-05 2.4e-05 -0 -0 0"/>
               <joint name="right_hip_pitch" type="hinge" axis="0 -1 0" range="-0.523599 0.523599" class="sts3215"/>
               <geom class="sts3215" pos="0.00115 0.01605 0.06856" type="mesh" rgba="0.7 0.7 0.7 1" mesh="thigh_R_1"/>
+              <geom name="thigh_R_1_box" type="box" pos="-0.00026 -0.01849 -0.03885" size="0.01523 0.02239 0.05000" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
               <body name="shin_R_1" pos="0.0 -0.03675 -0.07865">
                 <inertial pos="0.0006229452051883902 0.017779393744643435 -0.05028916711089096" mass="0.12600975" fullinertia="0.000117 9.9e-05 5.9e-05 -0 3e-06 -4e-06"/>
                 <joint name="right_knee" type="hinge" axis="0.0 -1.0 -0.0" range="-0.785398 0.523599" class="sts3215"/>
                 <geom class="sts3215" pos="0.00115 0.0528 0.14721" type="mesh" rgba="0.7 0.7 0.7 1" mesh="shin_R_1"/>
+                <geom name="shin_R_1_box" type="box" pos="0.00023 0.01297 -0.03914" size="0.02906 0.03462 0.05024" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
                 <body name="foot_R_1" pos="0.0 -5e-05 -0.07865">
                   <inertial pos="0.010884820137847633 0.018685818526312285 -0.023602507977935533" mass="0.081999565" fullinertia="2.3e-05 6.8e-05 7.6e-05 0 -0 2e-06"/>
                   <joint name="right_ankle" type="hinge" axis="-0.0 -1.0 -0.0" range="-0.785398 0.698132" class="sts3215"/>
@@ -164,4 +168,19 @@
     <position class="sts3215" name="head_yaw" joint="head_yaw" inheritrange="1"/>
   </actuator>
   <equality/>
+
+  <!-- CHANGES #25: left-right leg contact. The sts3215 class turns collision
+       off for all leg geoms, so in sim the legs passed through each other
+       (found on the real robot 2026-11-13). Each thigh/shin gets a
+       collision-only box (bounding box of its mesh in the body frame,
+       group 3, no mass: bodies have explicit inertials); only left-vs-right
+       pairs, so no same-leg excludes are needed. Boxes instead of the
+       meshes: mesh-mesh pairs made MJX ~40% slower. Feet already collide
+       with each other via their default contype. -->
+  <contact>
+    <pair geom1="shin_L_1_box" geom2="shin_R_1_box"/>
+    <pair geom1="thigh_L_1_box" geom2="thigh_R_1_box"/>
+    <pair geom1="shin_L_1_box" geom2="thigh_R_1_box"/>
+    <pair geom1="thigh_L_1_box" geom2="shin_R_1_box"/>
+  </contact>
 </mujoco>
