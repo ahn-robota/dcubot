@@ -480,6 +480,37 @@ overlapping in 10%/6% of steps, backward -0.3 mm.
   numbers after this are not directly comparable with earlier ones.
 - Trained from long19 25.6M as long20 (boxes) and long21 (hulls).
 
+## 26. Leg clearance cost, foot-lift cost while standing, more standing commands (2026-11-14, lab PC)
+
+Two problems after #24/#25, both approved by the user:
+
+1. Stepping in place under a zero command. Measured over 10 s (feet lifted
+   more than 5 mm): long17 1%, long18 17%, long19 44%, long21 14.9M 83%.
+   It grew with the servo noise of #24 (stepping keeps balance when the
+   servos do not track exactly) and more with the leg collision of #25.
+   Only 10% of commands were zero, and `stand_still` penalizes joint
+   angles and speeds but not a foot leaving the floor.
+2. The user wants the legs kept apart with some margin, since slips on
+   the real robot bring them together. Inflating the collision shapes
+   gives the policy a cushion to lean on (as the #25 boxes did), so the
+   margin is a cost, not a contact.
+
+Changes in `joystick.py` (new terms, not in upstream):
+
+- `leg_clearance=-2.0`: sum over the 4 left-right leg hull pairs (#25) of
+  `clip((m - d) / m, 0, 2)^2`, `m = leg_clearance_margin = 0.005` m. `d`
+  comes from `leg_clearance.py`: MJX gives no distance for separated mesh
+  pairs (and does not implement margin/gap for meshes), so each hull
+  vertex is checked against the other hull's face planes, both ways.
+  Within about 1 mm of `mj_geomDistance` from 0 to 10 mm (random leg
+  poses); deep overlaps read shallower but are capped at 2 anyway. No
+  measurable speed cost (930 env steps/s, same as #25).
+- `stand_feet_contact=-1.0`: number of feet off the floor (true contact,
+  not the noisy observation) while the command is zero.
+- `stand_command_prob` 0.1 (upstream) -> 0.2.
+
+Trained from long19 25.6M as long22.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

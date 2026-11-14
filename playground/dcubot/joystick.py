@@ -159,6 +159,7 @@ from playground.common.rewards import (
     reward_alive,
     reward_feet_air_time,
 )
+from playground.dcubot.leg_clearance import LegClearance
 from playground.dcubot.custom_rewards import (
     reward_imitation_dcubot,
     reward_feet_gait,
@@ -241,8 +242,17 @@ def default_config() -> config_dict.ConfigDict:
                 # torso upright. The reference's leg angles lean it ~11 deg
                 # forward with flat feet (CHANGES #16).
                 orientation=-20.0,
+                # Not in upstream (CHANGES #26). leg_clearance: sum over the
+                # left-right leg hull pairs of (clip((m - d) / m, 0, 2))^2,
+                # m = leg_clearance_margin, d = hull distance -- keeps the
+                # legs apart before they touch (real robot: slips make them
+                # collide). stand_feet_contact: number of feet off the floor
+                # under a zero command (stepping in place while standing).
+                leg_clearance=-2.0,
+                stand_feet_contact=-1.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
+            leg_clearance_margin=0.005,  # m, between the reduced leg hulls (CHANGES #26)
         ),
         push_config=config_dict.create(
             enable=True,
@@ -252,6 +262,7 @@ def default_config() -> config_dict.ConfigDict:
         gait_period=0.4,  # s; Placo period for dcubot was 0.408
         feet_clearance_target_z=0.03,  # m, foot site; 0.000 at the home pose (final-URDF MJCF) -> 3 cm swing
         single_axis_command_prob=0.3,  # see sample_command
+        stand_command_prob=0.2,  # upstream 0.1: more standing practice (CHANGES #26)
         # tracking_ang_vel scores a low-passed yaw rate (s; ~one gait cycle):
         # stepping swings the instantaneous rate by 0.16-0.75 rad/s (std),
         # far beyond sqrt(tracking_sigma) = 0.055, so the raw reward barely
@@ -345,6 +356,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             [self._mj_model.site(name).id for name in constants.FEET_SITES]
         )
         self._floor_geom_id = self._mj_model.geom("floor").id
+        self._leg_clearance = LegClearance(self._mj_model)  # CHANGES #26
         self._feet_geom_id = np.array(
             [self._mj_model.geom(name).id for name in constants.FEET_GEOMS]
         )
@@ -787,6 +799,18 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             "feet_air_time": reward_feet_air_time(
                 info["feet_air_time"], first_contact, info["command"]
             ),
+            "leg_clearance": jp.sum(
+                jp.square(
+                    jp.clip(
+                        (self._config.reward_config.leg_clearance_margin - self._leg_clearance(data))
+                        / self._config.reward_config.leg_clearance_margin,
+                        0.0,
+                        2.0,
+                    )
+                )
+            ),
+            "stand_feet_contact": jp.sum(1.0 - contact)
+            * (jp.linalg.norm(info["command"][:3]) < 0.01),
             "feet_gait": reward_feet_gait(
                 info["gait_step"], self.dt, self._config.gait_period, contact,
                 info["command"],
@@ -867,7 +891,7 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
         )
 
         return jp.where(
-            jax.random.bernoulli(rng4, p=0.1),
+            jax.random.bernoulli(rng4, p=self._config.stand_command_prob),
             jp.zeros(6),
             jp.hstack(
                 [
