@@ -248,11 +248,13 @@ def default_config() -> config_dict.ConfigDict:
                 # legs apart before they touch (real robot: slips make them
                 # collide). stand_feet_contact: number of feet off the floor
                 # under a zero command (stepping in place while standing).
-                leg_clearance=-2.0,
-                stand_feet_contact=-1.0,
+                # -2 / -1 -> -10 / -10 (long22: both ~1-3% of the episode
+                # reward, no effect), CHANGES #26.
+                leg_clearance=-10.0,
+                stand_feet_contact=-10.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
-            leg_clearance_margin=0.005,  # m, between the reduced leg hulls (CHANGES #26)
+            leg_clearance_margin=0.008,  # m, between the reduced leg hulls (~5 mm between the real meshes), CHANGES #26
         ),
         push_config=config_dict.create(
             enable=True,

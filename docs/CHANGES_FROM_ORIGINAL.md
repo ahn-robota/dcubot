@@ -511,6 +511,15 @@ Changes in `joystick.py` (new terms, not in upstream):
 
 Trained from long19 25.6M as long22.
 
+**Update (2026-11-16, approved by the user):** long22 did not change
+either behaviour. Per episode `stand_feet_contact` cost ~20 and
+`leg_clearance` ~80 against `alive` ~2400; standing feet-up time stayed
+80-95%, and strafing still overlapped the visual meshes by up to 2 mm
+(the 32-vertex hulls are up to ~3 mm smaller than the meshes). Now
+`leg_clearance=-10.0`, `stand_feet_contact=-10.0`,
+`leg_clearance_margin=0.008` (~5 mm between the real meshes). Trained
+from long18 12.8M (least stepping of the #24 policies) as long23.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
