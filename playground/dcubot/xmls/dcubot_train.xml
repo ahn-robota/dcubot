@@ -65,7 +65,9 @@
     <mesh name="shin_L_1" file="shin_L_1.stl" scale="0.001 0.001 0.001"/>
     <mesh name="shin_L_1_hull" file="shin_L_1.stl" scale="0.001 0.001 0.001" maxhullvert="32"/>
     <mesh name="foot_R_1" file="foot_R_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="foot_R_1_hull" file="foot_R_1.stl" scale="0.001 0.001 0.001" maxhullvert="32"/>
     <mesh name="foot_L_1" file="foot_L_1.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="foot_L_1_hull" file="foot_L_1.stl" scale="0.001 0.001 0.001" maxhullvert="32"/>
     <mesh name="neck_1" file="neck_1.stl" scale="0.001 0.001 0.001"/>
     <mesh name="head_mount_1" file="head_mount_1.stl" scale="0.001 0.001 0.001"/>
     <mesh name="head_1" file="head_1.stl" scale="0.001 0.001 0.001"/>
@@ -103,6 +105,7 @@
                   <inertial pos="0.01088482013785114 0.018685818526315574 -0.023602507977934784" mass="0.081999565" fullinertia="2.3e-05 6.8e-05 7.6e-05 0 -0 2e-06"/>
                   <joint name="left_ankle" type="hinge" axis="0.0 -1.0 -0.0" range="-0.785398 0.698132" class="sts3215"/>
                   <geom name="left_foot_collision" pos="0.00115 -0.017 0.22586" type="mesh" rgba="0.7 0.7 0.7 1" mesh="foot_L_1"/>
+                  <geom name="foot_L_1_hull" type="mesh" mesh="foot_L_1_hull" pos="0.00115 -0.017 0.22586" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
                   <site name="left_foot" pos="0.01457818 0.01826794 -0.038825"/>
                 </body>
               </body>
@@ -131,6 +134,7 @@
                   <inertial pos="0.010884820137847633 0.018685818526312285 -0.023602507977935533" mass="0.081999565" fullinertia="2.3e-05 6.8e-05 7.6e-05 0 -0 2e-06"/>
                   <joint name="right_ankle" type="hinge" axis="-0.0 -1.0 -0.0" range="-0.785398 0.698132" class="sts3215"/>
                   <geom name="right_foot_collision" pos="0.00115 0.05285 0.22586" type="mesh" rgba="0.7 0.7 0.7 1" mesh="foot_R_1"/>
+                  <geom name="foot_R_1_hull" type="mesh" mesh="foot_R_1_hull" pos="0.00115 0.05285 0.22586" contype="0" conaffinity="0" group="3" rgba="1 0 0 0.3"/>
                   <site name="right_foot" pos="0.01457818 0.01826794 -0.038825"/>
                 </body>
               </body>
@@ -181,11 +185,14 @@
        only left-vs-right pairs, so no same-leg excludes are needed. 32
        vertices: within 0-2.7 mm of the full hull, MJX ~15% slower (full
        meshes ~40%; bounding boxes touched ~5 mm early). Feet already collide
-       with each other via their default contype. -->
+       with each other via their default contype; CHANGES #27 adds 32-vertex
+       foot hulls for foot-vs-other-shin contact (and the clearance cost). -->
   <contact>
     <pair geom1="shin_L_1_hull" geom2="shin_R_1_hull"/>
     <pair geom1="thigh_L_1_hull" geom2="thigh_R_1_hull"/>
     <pair geom1="shin_L_1_hull" geom2="thigh_R_1_hull"/>
     <pair geom1="thigh_L_1_hull" geom2="shin_R_1_hull"/>
+    <pair geom1="foot_L_1_hull" geom2="shin_R_1_hull"/>
+    <pair geom1="shin_L_1_hull" geom2="foot_R_1_hull"/>
   </contact>
 </mujoco>

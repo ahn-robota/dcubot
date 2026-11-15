@@ -520,6 +520,26 @@ either behaviour. Per episode `stand_feet_contact` cost ~20 and
 `leg_clearance_margin=0.008` (~5 mm between the real meshes). Trained
 from long18 12.8M (least stepping of the #24 policies) as long23.
 
+## 27. V-stance fix (hip_yaw cost) and foot clearance (2026-11-16, lab PC)
+
+Real-robot test of long22 (laptop, `SIM2REAL_DEBUG` section 7): standing,
+the feet form a V (toes out) and touch lightly. In sim every policy since
+long17 holds both hip_yaw at the -10 deg joint limit, standing and
+walking (forward std 0.1 deg); the reference keeps hip_yaw near 0. At
+the V the feet hulls come from 23 mm to 6.8 mm apart. Approved by the user:
+
+- `hip_yaw_pose=-2.0` (new): `sum |hip_yaw - home|` of both legs, always.
+- `stand_hip_pose=-5.0` (new): `sum self._weights * |q - home|` over the
+  10 leg joints (hip_yaw/hip_roll/ankle 1.0, hip_pitch/knee 0.01), zero
+  command only. `self._weights` was defined (upstream too) but never used.
+- Foot hulls `foot_L_1_hull` / `foot_R_1_hull` (32 vertices, group 3,
+  collision-only) in both xmls, with `<pair>`s foot_L-shin_R and
+  shin_L-foot_R (the feet already collide with each other via their
+  default contype). `leg_clearance` (#26) now also covers these two pairs
+  and foot_L-foot_R (cost-only, `LegClearance(extra=...)`).
+
+Trained from long23 17.0M (stopped early at the user's request) as long24.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

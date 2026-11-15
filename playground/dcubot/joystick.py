@@ -252,6 +252,15 @@ def default_config() -> config_dict.ConfigDict:
                 # reward, no effect), CHANGES #26.
                 leg_clearance=-10.0,
                 stand_feet_contact=-10.0,
+                # CHANGES #27 (not in upstream). All policies since long17
+                # hold hip_yaw at its -10 deg limit (toes out, V-stance) both
+                # standing and walking; the reference keeps it near 0.
+                # hip_yaw_pose: sum |hip_yaw - home| of both legs, always.
+                # stand_hip_pose: sum over leg joints of self._weights *
+                # |q - home| (hip_yaw/hip_roll/ankle 1.0, hip_pitch/knee
+                # 0.01; the array was defined but never used), zero command only.
+                hip_yaw_pose=-2.0,
+                stand_hip_pose=-5.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
             leg_clearance_margin=0.008,  # m, between the reduced leg hulls (~5 mm between the real meshes), CHANGES #26
@@ -358,7 +367,11 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
             [self._mj_model.site(name).id for name in constants.FEET_SITES]
         )
         self._floor_geom_id = self._mj_model.geom("floor").id
-        self._leg_clearance = LegClearance(self._mj_model)  # CHANGES #26
+        # CHANGES #26; foot-foot added as a cost-only pair in #27
+        self._leg_clearance = LegClearance(self._mj_model, extra=[("foot_L_1_hull", "foot_R_1_hull")])
+        self._hip_yaw_indices = jp.array(
+            [self.actuator_names.index(n) for n in ("left_hip_yaw", "right_hip_yaw")]
+        )
         self._feet_geom_id = np.array(
             [self._mj_model.geom(name).id for name in constants.FEET_GEOMS]
         )
@@ -811,6 +824,19 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                     )
                 )
             ),
+            "hip_yaw_pose": jp.sum(
+                jp.abs(
+                    self.get_actuator_joints_qpos(data.qpos)[self._hip_yaw_indices]
+                    - self._default_actuator[self._hip_yaw_indices]
+                )
+            ),
+            "stand_hip_pose": jp.sum(
+                self._weights
+                * jp.abs(
+                    self.get_actuator_joints_qpos(data.qpos)[:10] - self._default_actuator[:10]
+                )
+            )
+            * (jp.linalg.norm(info["command"][:3]) < 0.01),
             "stand_feet_contact": jp.sum(1.0 - contact)
             * (jp.linalg.norm(info["command"][:3]) < 0.01),
             "feet_gait": reward_feet_gait(

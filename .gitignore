@@ -15,7 +15,7 @@ BEST_WALK_TMP/
 *.log
 *.csv
 *.gif
-.venv/
+.venv
 backups/
 eval_results/
 .scratch_*/

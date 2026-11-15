@@ -30,10 +30,13 @@ def _hull(m: mujoco.MjModel, geom: int):
 
 
 class LegClearance:
-    """min signed distance (m) of each explicit `<pair>` in the model (the CHANGES #25 leg hulls)."""
+    """min signed distance (m) of each explicit `<pair>` in the model (the CHANGES #25 leg hulls),
+    plus `extra` cost-only pairs given by geom name (CHANGES #27: foot hulls, whose contact
+    comes from the feet's own contype, not a pair)."""
 
-    def __init__(self, m: mujoco.MjModel):
+    def __init__(self, m: mujoco.MjModel, extra=()):
         self.pairs = [(int(a), int(b)) for a, b in zip(m.pair_geom1, m.pair_geom2)]
+        self.pairs += [(m.geom(a).id, m.geom(b).id) for a, b in extra]
         hulls = {g: _hull(m, g) for p in self.pairs for g in p}
         self.hulls = {g: tuple(jp.asarray(x) for x in h) for g, h in hulls.items()}
 
