@@ -28,3 +28,5 @@ git pull
 **long18부터는 목을 고정해서 학습했다.** `policy_runner.py`가 기본으로 neck_pitch 목표를 home에 고정한다(`--fix_neck`). 목을 고정하지 않고 학습한 long17 이전 정책은 `--no-fix_neck`으로 실행한다.
 
 **2026-11-16: long22 25.6M 시험 배포.** 좌우 다리 충돌(master #25)과 다리 간격 벌점(#26)으로 학습한 정책. 서 있을 때 제자리걸음이 long18보다 심하다(발 들림 시간 88% vs 17%). 문제가 있으면 long18 12.8M으로 되돌린다: `git show 4c78f4a:hardware/policies/current.onnx > hardware/policies/current.onnx`.
+
+**2026-11-16: long25 8.5M 시험 배포.** 서 있을 때 제자리걸음 없음(시뮬), V자(hip_yaw -10도)는 남아 있음. xml에 발 충돌 hull과 발–정강이 충돌 쌍 추가. 되돌리기: long22 `git show 5e0432f:hardware/policies/current.onnx > hardware/policies/current.onnx`.
