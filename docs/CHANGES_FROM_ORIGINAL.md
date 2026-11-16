@@ -560,6 +560,19 @@ parallel feet, hip_yaw 0, standing and walking):
 
 Trained from long24 25.6M as long25.
 
+## 29. hip_yaw range +-10 deg -> +-4 deg (2026-11-16, lab PC)
+
+long25 (#28) at 8.5M still held the hip_yaw target at -11.5 deg standing
+(joint at the -10 deg limit) and -10 deg walking; the reward terms of #27
+and #28 did not move the V-stance. At the user's request the hip_yaw joint
+range in both xmls is now `+-0.069813` rad (4 deg). The position
+actuators inherit it (`inheritrange`), and the robot's `policy_runner`
+clips its targets to the same xml joint ranges (`safety.load_joint_limits`),
+so sim and robot share the limit. The #27/#28 hip terms are kept. Turning
+uses hip_yaw only ~1-2 deg in the reference.
+
+Trained from long25 8.5M (stopped early) as long26.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
