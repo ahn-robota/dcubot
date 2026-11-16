@@ -540,6 +540,26 @@ the V the feet hulls come from 23 mm to 6.8 mm apart. Approved by the user:
 
 Trained from long23 17.0M (stopped early at the user's request) as long24.
 
+## 28. Hip terms on the unclipped motor target, hip_yaw_zero reward (2026-11-16, lab PC)
+
+long24 (#27) still held both hip_yaw at the -10 deg limit (standing -9.8,
+forward -9.6 deg) and the `hip_yaw_pose` cost hardly moved (315 -> 302
+per episode). The policy's hip_yaw target was -11.5 deg (action -0.8 x
+0.25), clipped to the +-10 deg ctrlrange, so the joint angle -- and a cost
+on it -- did not change until the target came back inside the range: no
+gradient. Approved by the user (who also asked for a term that rewards
+parallel feet, hip_yaw 0, standing and walking):
+
+- `hip_yaw_pose` (-2) and `stand_hip_pose` (-5) now read
+  `info["motor_targets"]` (the target before the ctrlrange clip and the
+  servo noise) instead of qpos.
+- `hip_yaw_zero=+2.0` (new): mean over both legs of
+  `exp(-(target_hip_yaw / hip_yaw_zero_sigma)^2)`, `sigma = 0.07` rad
+  (4 deg), always. The linear cost pulls from anywhere; this holds it
+  near 0 (the reference uses hip_yaw ~1-2 deg for turning).
+
+Trained from long24 25.6M as long25.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,

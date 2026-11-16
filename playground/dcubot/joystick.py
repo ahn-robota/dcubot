@@ -261,8 +261,17 @@ def default_config() -> config_dict.ConfigDict:
                 # 0.01; the array was defined but never used), zero command only.
                 hip_yaw_pose=-2.0,
                 stand_hip_pose=-5.0,
+                # CHANGES #28: long24 still held hip_yaw at the limit -- its
+                # target was -11.5 deg, clipped to the -10 deg ctrlrange, so
+                # a cost on the joint angle had no gradient there. The three
+                # hip terms now read the unclipped motor target
+                # (info["motor_targets"]) instead of qpos, and
+                # hip_yaw_zero rewards exp(-(target / hip_yaw_zero_sigma)^2)
+                # (mean of both legs) for parallel feet, always.
+                hip_yaw_zero=2.0,
             ),
             tracking_sigma=0.003,  # see deviation #4 above (2026-10-28 experiment)
+            hip_yaw_zero_sigma=0.07,  # rad (4 deg), CHANGES #28
             leg_clearance_margin=0.008,  # m, between the reduced leg hulls (~5 mm between the real meshes), CHANGES #26
         ),
         push_config=config_dict.create(
@@ -824,17 +833,27 @@ class Joystick(open_duck_mini_v2_base.OpenDuckMiniV2Env):
                     )
                 )
             ),
+            # CHANGES #27/#28: on the unclipped motor target, not qpos
             "hip_yaw_pose": jp.sum(
                 jp.abs(
-                    self.get_actuator_joints_qpos(data.qpos)[self._hip_yaw_indices]
+                    info["motor_targets"][self._hip_yaw_indices]
                     - self._default_actuator[self._hip_yaw_indices]
+                )
+            ),
+            "hip_yaw_zero": jp.mean(
+                jp.exp(
+                    -jp.square(
+                        (
+                            info["motor_targets"][self._hip_yaw_indices]
+                            - self._default_actuator[self._hip_yaw_indices]
+                        )
+                        / self._config.reward_config.hip_yaw_zero_sigma
+                    )
                 )
             ),
             "stand_hip_pose": jp.sum(
                 self._weights
-                * jp.abs(
-                    self.get_actuator_joints_qpos(data.qpos)[:10] - self._default_actuator[:10]
-                )
+                * jp.abs(info["motor_targets"][:10] - self._default_actuator[:10])
             )
             * (jp.linalg.norm(info["command"][:3]) < 0.01),
             "stand_feet_contact": jp.sum(1.0 - contact)
