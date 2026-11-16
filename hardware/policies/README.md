@@ -32,3 +32,5 @@ git pull
 **2026-11-16: long25 8.5M 시험 배포.** 서 있을 때 제자리걸음 없음(시뮬), V자(hip_yaw -10도)는 남아 있음. xml에 발 충돌 hull과 발–정강이 충돌 쌍 추가. 되돌리기: long22 `git show 5e0432f:hardware/policies/current.onnx > hardware/policies/current.onnx`.
 
 **2026-11-16: long26 17.0M 시험 배포.** hip_yaw 관절 범위를 ±4도로 좁혀 학습(master #29). xml의 hip_yaw 범위도 ±4도로 바뀌어서 `policy_runner`/`bridge_server`가 로봇에서도 ±4도로 자른다. 시뮬 hip_yaw 약 -4도(long25는 -10도). 되돌리기: long25 `git show ee819f4:hardware/policies/current.onnx > hardware/policies/current.onnx` + `git checkout ee819f4 -- playground/dcubot/xmls/`.
+
+**2026-11-17: long26 25.6M(최종)으로 교체.** 17.0M보다 회전이 좋고(1.07/0.97 vs 0.92/0.84) 서 있을 때 발 들림 0%(17.0M 7.5%), 옆걸음은 약함(0.40/0.47 vs 0.49/0.55). xml(±4도)은 그대로. 17.0M으로 되돌리기: `git show 5e47081:hardware/policies/current.onnx > hardware/policies/current.onnx`.
