@@ -30,3 +30,5 @@ git pull
 **2026-11-16: long22 25.6M 시험 배포.** 좌우 다리 충돌(master #25)과 다리 간격 벌점(#26)으로 학습한 정책. 서 있을 때 제자리걸음이 long18보다 심하다(발 들림 시간 88% vs 17%). 문제가 있으면 long18 12.8M으로 되돌린다: `git show 4c78f4a:hardware/policies/current.onnx > hardware/policies/current.onnx`.
 
 **2026-11-16: long25 8.5M 시험 배포.** 서 있을 때 제자리걸음 없음(시뮬), V자(hip_yaw -10도)는 남아 있음. xml에 발 충돌 hull과 발–정강이 충돌 쌍 추가. 되돌리기: long22 `git show 5e0432f:hardware/policies/current.onnx > hardware/policies/current.onnx`.
+
+**2026-11-16: long26 17.0M 시험 배포.** hip_yaw 관절 범위를 ±4도로 좁혀 학습(master #29). xml의 hip_yaw 범위도 ±4도로 바뀌어서 `policy_runner`/`bridge_server`가 로봇에서도 ±4도로 자른다. 시뮬 hip_yaw 약 -4도(long25는 -10도). 되돌리기: long25 `git show ee819f4:hardware/policies/current.onnx > hardware/policies/current.onnx` + `git checkout ee819f4 -- playground/dcubot/xmls/`.
