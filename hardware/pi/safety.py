@@ -35,8 +35,13 @@ TORQUE_ENABLE_STAGGER_S = 0.1
 # policy_runner.py's loop_hz) were both correct. Matches training's own
 # MAX_MOTOR_VELOCITY (playground/dcubot/policy_constants.py, 5.24 rad/s),
 # converted to the deg/s unit pypot's FeetechSTS3215IO.set_goal_speed takes
-# (confirmed via its docstring: "Goal speed (in degrees per second)").
-MAX_SERVO_SPEED_DEG = 300.2
+# (confirmed via its docstring: "Goal speed (in degrees per second)"). Must
+# be an int: pypot's raw IO layer bit-shifts the value to split it into
+# protocol bytes, which TypeErrors on a float ("unsupported operand
+# type(s) for >>: 'float' and 'int'" -- found 2026-11-17 the hard way,
+# this is why torque never actually turned on after the first version of
+# this fix: the error happened before the per-servo enable loop ran).
+MAX_SERVO_SPEED_DEG = 300
 
 
 def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger_s=TORQUE_ENABLE_STAGGER_S,
@@ -67,7 +72,7 @@ def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger
         raise RuntimeError(f"zero_offset_exceeded: {bad}")
     servo_io.set_goal_position(positions)
     if speed_deg is not None:
-        servo_io.set_goal_speed({id_: speed_deg for id_ in ids})
+        servo_io.set_goal_speed({id_: int(speed_deg) for id_ in ids})
     for id_ in ids:
         servo_io.enable_torque([id_])
         time.sleep(stagger_s)
