@@ -393,3 +393,4 @@ velocity (#13), and the sim-to-real config (#16 orientation cost off while
 walking back, #17 action_rate -1.0, wider randomization, 0.2 m/s top speed).
 Judge checkpoints on the 64-robot eval only: the per-checkpoint single-run
 eval swings turning and backward between 0 and 1.8.
+| long27 | long26 25.6M + CHANGES #30 (hip_yaw -1..+4 deg, feet_spacing 0.08 references + home, commands x -0.195..0.26, y +-0.156, yaw +-0.195) | 25M planned | | Started 2026-11-18 02:34, running |

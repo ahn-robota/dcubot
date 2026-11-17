@@ -170,7 +170,7 @@ from playground.dcubot.custom_rewards import (
 # layout-incompatible with dcubot's pkl, reward_imitation_dcubot used instead.
 USE_IMITATION_REWARD = True
 USE_MOTOR_SPEED_LIMITS = True
-DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_trunk0_deg9.pkl"
+DCUBOT_REFERENCE_PKL = "playground/dcubot/data/polynomial_coefficients_omnidirectional_fs80_deg9.pkl"  # CHANGES #30 (feet_spacing 0.08)
 
 
 def default_config() -> config_dict.ConfigDict:

@@ -573,6 +573,17 @@ uses hip_yaw only ~1-2 deg in the reference.
 
 Trained from long25 8.5M (stopped early) as long26.
 
+## 30. Asymmetric hip_yaw range, 80 mm stance, +30% command ranges (2026-11-18, lab PC)
+
+User request after the first successful real-robot walk with long26 (V-stance and foot interference still seen on the robot, wider stance and ~30% longer steps wanted).
+
+- **hip_yaw range -4..+4 deg -> -1..+4 deg** (`dcubot.xml`, `dcubot_train.xml`, both legs). Negative is toes out on both legs (checked in sim: -4 deg turns the left toe +3.8 deg and the right toe -3.0 deg outward). Every policy held hip_yaw at the outward limit, so the outward limit is now 1 deg; inward 4 deg stays for turning. The robot's `policy_runner` clips to these xml ranges too.
+- **feet_spacing 0.07 -> 0.08 m** in the reference generator (`placo_presets/medium.json`, `placo_defaults.json`). Swept again (210 gaits, same grid) into `recordings_omnidirectional_fs80/` and fit at degree 9 -> `polynomial_coefficients_omnidirectional_fs80_deg9.pkl`, now `DCUBOT_REFERENCE_PKL`. Hip spacing is 70 mm and there is no ankle roll, so the extra width comes from hip_roll (standing reference +0.022 rad, about 1.3 deg, sole tilt about 1 mm across the foot).
+- **home keyframe** (`scene_flat_terrain.xml`, `scene_flat_terrain_train.xml`) set to the new standing reference, L/R averaged: hip_roll 0.0221, hip_pitch -0.0990, knee 0.0410, ankle 0.0579; base height 0.264145 -> 0.264294 so the soles touch the floor. Foot centre spacing at home 69.8 -> 78.9 mm. The robot reads home from `scene_flat_terrain.xml`, so this file must be deployed with the policy.
+- **Command ranges +30%** (run args): lin_vel_x -0.15..0.2 -> -0.195..0.26, lin_vel_y +-0.12 -> +-0.156, ang_vel_yaw +-0.15 -> +-0.195. The existing reference grid already covers these (x labels -0.196..0.294, y +-0.294, yaw +-1.96).
+- Not done: leg-torso collision. A convex hull of `base_link` reaches down around the hips (thighs start 80 mm inside it), so it needs a convex decomposition of the torso first.
+- Reward weights and PPO settings unchanged.
+
 ## Unchanged (confirmed identical to upstream)
 
 Reward weights (tracking_lin_vel=2.5, tracking_ang_vel=6.0, torques=-1e-3,
