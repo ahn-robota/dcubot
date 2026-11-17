@@ -25,12 +25,27 @@ def check_near_zero(positions_deg, limit_deg=ZERO_OFFSET_LIMIT_DEG):
 
 TORQUE_ENABLE_STAGGER_S = 0.1
 
+# The Feetech STS3215's goal_speed register was never being set (checked
+# 2026-11-17: every servo read back 0), and 0 means "no limit, move at max
+# speed" in this protocol -- so every goal_position write snapped the servo
+# there near-instantly, every tick, instead of approaching it smoothly the
+# way MuJoCo's simulated PD servo does. On the real robot this showed up as
+# each step looking abrupt/too fast compared to the sim viewer, even though
+# the gait cadence (steps/sec) and control loop rate (confirmed ~47-50Hz via
+# policy_runner.py's loop_hz) were both correct. Matches training's own
+# MAX_MOTOR_VELOCITY (playground/dcubot/policy_constants.py, 5.24 rad/s),
+# converted to the deg/s unit pypot's FeetechSTS3215IO.set_goal_speed takes
+# (confirmed via its docstring: "Goal speed (in degrees per second)").
+MAX_SERVO_SPEED_DEG = 300.2
 
-def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger_s=TORQUE_ENABLE_STAGGER_S):
+
+def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger_s=TORQUE_ENABLE_STAGGER_S,
+                          speed_deg=MAX_SERVO_SPEED_DEG):
     """Reads current position, refuses if any joint is too far from zero,
     otherwise sets the goal to the current position (so torque doesn't
-    yank the servo toward some stale registered goal) and enables torque
-    ONE SERVO AT A TIME, `stagger_s` apart -- not all 13 simultaneously.
+    yank the servo toward some stale registered goal), caps goal_speed on
+    every servo to `speed_deg` (see MAX_SERVO_SPEED_DEG above), and enables
+    torque ONE SERVO AT A TIME, `stagger_s` apart -- not all 13 simultaneously.
 
     Real hardware repeatedly showed a USB+I2C comms glitch within one
     control tick of torque turning on (see docs/HARDWARE_SETUP.md's
@@ -51,6 +66,8 @@ def enable_torque_safely(servo_io, ids, limit_deg=ZERO_OFFSET_LIMIT_DEG, stagger
     if bad:
         raise RuntimeError(f"zero_offset_exceeded: {bad}")
     servo_io.set_goal_position(positions)
+    if speed_deg is not None:
+        servo_io.set_goal_speed({id_: speed_deg for id_ in ids})
     for id_ in ids:
         servo_io.enable_torque([id_])
         time.sleep(stagger_s)
