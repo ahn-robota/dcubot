@@ -24,9 +24,10 @@ GAIT_PERIOD = 0.4  # s
 MAX_MOTOR_VELOCITY = 5.24  # rad/s
 CONTROL_DT = 0.02  # s (joystick.py's ctrl_dt == mujoco_infer.py's sim_dt * decimation)
 
-LIN_VEL_X_RANGE = (-0.15, 0.20)
-LIN_VEL_Y_RANGE = (-0.12, 0.12)
-ANG_VEL_YAW_RANGE = (-0.15, 0.15)
+# long27 (master CHANGES #30): ranges +30% over long18-long26 (-0.15/0.20, +-0.12, +-0.15).
+LIN_VEL_X_RANGE = (-0.195, 0.26)
+LIN_VEL_Y_RANGE = (-0.156, 0.156)
+ANG_VEL_YAW_RANGE = (-0.195, 0.195)
 
 # playground/dcubot/xmls/dcubot.xml's <actuator> declaration order -- the
 # ONNX policy's observation/action vectors are flat arrays in exactly this

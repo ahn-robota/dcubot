@@ -85,7 +85,7 @@
 
         <body name="hip_yaw_L_1" pos="0.0 0.035 -0.01895">
           <inertial pos="0.002137454030377803 -1.6410484082740595e-13 -0.012097437557752923" mass="0.0029997117" fullinertia="4.99497e-07 1.04946e-06 9.70547e-07 2.64547e-15 1.5192e-15 7.25961e-08"/>
-          <joint name="left_hip_yaw" type="hinge" axis="-0.0 -0.0 -1.0" range="-0.069813 0.069813" class="sts3215"/>
+          <joint name="left_hip_yaw" type="hinge" axis="-0.0 -0.0 -1.0" range="-0.017453 0.069813" class="sts3215"/>
           <geom class="sts3215" pos="-0.0 -0.035 0.01895" type="mesh" rgba="0.7 0.7 0.7 1" mesh="hip_yaw_L_1"/>
           <body name="hip_roll_L_1" pos="0.024 0.0 -0.022">
             <inertial pos="-0.003613616194621576 0.0003749562139069504 -0.013893319207638234" mass="0.15901564" fullinertia="5.4e-05 0.000127 0.000111 1e-06 -0 -3e-06"/>
@@ -114,7 +114,7 @@
         </body>
         <body name="hip_yaw_R_1" pos="0.0 -0.035 -0.01895">
           <inertial pos="0.0021374540303770928 -1.6428525206890754e-13 -0.012097437557752888" mass="0.0029997117" fullinertia="4.99497e-07 1.04946e-06 9.70547e-07 -1.57534e-15 -1.58722e-15 7.25961e-08"/>
-          <joint name="right_hip_yaw" type="hinge" axis="0 0 1" range="-0.069813 0.069813" class="sts3215"/>
+          <joint name="right_hip_yaw" type="hinge" axis="0 0 1" range="-0.017453 0.069813" class="sts3215"/>
           <geom class="sts3215" pos="0.0 0.035 0.01895" type="mesh" rgba="0.7 0.7 0.7 1" mesh="hip_yaw_R_1"/>
           <body name="hip_roll_R_1" pos="0.024 0.0 -0.022">
             <inertial pos="-0.00361365637091288 0.00037503253984825374 -0.013893298683316943" mass="0.15901564" fullinertia="5.4e-05 0.000127 0.000111 1e-06 -0 -3e-06"/>

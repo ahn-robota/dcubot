@@ -34,3 +34,5 @@ git pull
 **2026-11-16: long26 17.0M 시험 배포.** hip_yaw 관절 범위를 ±4도로 좁혀 학습(master #29). xml의 hip_yaw 범위도 ±4도로 바뀌어서 `policy_runner`/`bridge_server`가 로봇에서도 ±4도로 자른다. 시뮬 hip_yaw 약 -4도(long25는 -10도). 되돌리기: long25 `git show ee819f4:hardware/policies/current.onnx > hardware/policies/current.onnx` + `git checkout ee819f4 -- playground/dcubot/xmls/`.
 
 **2026-11-17: long26 25.6M(최종)으로 교체.** 17.0M보다 회전이 좋고(1.07/0.97 vs 0.92/0.84) 서 있을 때 발 들림 0%(17.0M 7.5%), 옆걸음은 약함(0.40/0.47 vs 0.49/0.55). xml(±4도)은 그대로. 17.0M으로 되돌리기: `git show 5e47081:hardware/policies/current.onnx > hardware/policies/current.onnx`.
+
+**2026-11-18: long27 23.4M 시험 배포.** hip_yaw 바깥 1도/안쪽 4도, 발 간격 80 mm(새 home 자세), 명령 범위 +30%(master #30). xml 4개와 `policy_constants.py`가 정책과 한 세트. 되돌리기(long26 25.6M): `git checkout c8c2f0d -- hardware/policies/current.onnx playground/dcubot/xmls/ playground/dcubot/policy_constants.py`.
